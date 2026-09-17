@@ -998,7 +998,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return true;
   }
   const ROPE_PENDING_TIMEOUT_MS = 2500;
-  const ROPE_MAX_RETRIES = 1;
+  const ROPE_RETRY_INTERVAL_MS = 1500;
 
   function clearRopePending() {
     state.ropePendingTarget = null;
@@ -1069,9 +1069,13 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         return true;
       }
 
-      if (state.ropeRetryCount < ROPE_MAX_RETRIES) {
-        const pendingTile = getTileAt(pendingRopeTarget);
-        if (pendingTile && isRopeTargetTile(pendingTile) && now - state.lastStairsUseAt >= 1200) {
+      const pendingTile = getTileAt(pendingRopeTarget);
+
+      // Never forget the selected rope hole merely because the transition
+      // timed out. Keep retrying the exact same coordinate while it remains
+      // a valid rope target.
+      if (pendingTile && isRopeTargetTile(pendingTile)) {
+        if (now - state.lastStairsUseAt >= ROPE_RETRY_INTERVAL_MS) {
           state.ropeRetryCount += 1;
           bot.log("cave retrying locked rope floor transition", {
             source: pendingRopeTarget,
@@ -1084,17 +1088,22 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
             now,
             state.ropeLockedApproach
           );
-          return true;
         }
+        return true;
       }
 
-      bot.log("cave locked rope transition failed, releasing target", {
-        source: pendingRopeTarget,
-        retries: state.ropeRetryCount,
-        pendingForMs: pendingAge,
-      });
-      clearRopePending();
-      clearRopeLock();
+      // Only release the lock when the exact tile is known and is no longer
+      // a rope target. A temporarily unloaded tile is not a failure.
+      if (pendingTile && !isRopeTargetTile(pendingTile)) {
+        bot.log("cave locked rope target is no longer a rope tile", {
+          source: pendingRopeTarget,
+          pendingForMs: pendingAge,
+        });
+        clearRopePending();
+        clearRopeLock();
+      } else {
+        return true;
+      }
     }
 
     // A selected rope hole owns this floor transition. Do not scan or switch
@@ -1145,14 +1154,18 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         return true;
       }
 
-      // Only the selected hole becoming invalid releases the lock and permits
-      // selection of a different hole.
-      bot.log("cave locked rope target became invalid, reacquiring", {
-        source: lockedTarget,
-        targetZ: waypoint.z,
-      });
-      clearRopeLock();
-    }
+      // Only release the lock when the exact selected tile is known and
+      // explicitly no longer a rope target.
+      if (lockedTile && !isRopeTargetTile(lockedTile)) {
+        bot.log("cave locked rope target became invalid, reacquiring", {
+          source: lockedTarget,
+          targetZ: waypoint.z,
+        });
+        clearRopeLock();
+      } else {
+        // Keep the coordinate locked if the tile is temporarily unavailable.
+        return true;
+      }
 
     // No rope target is locked yet. Select exactly one candidate.
     const visibleCandidate = findNearbyTransitionTile(position, waypoint);
