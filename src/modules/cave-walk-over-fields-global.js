@@ -3,8 +3,9 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 (function installGlobalCaveFieldPathing() {
   const state = { timerId: null, patched: false, originalFindPath: null, pathfinder: null };
 
-  // Keep this list aligned with CaveBot's existing D-pad field handling.
+  // Match the field IDs already used by CaveBot Arrow / D-pad pathing.
   const FIRE_FIELD_IDS = new Set([1487, 1488, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1500, 1501, 1502]);
+  const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
 
   function normalizePosition(value) {
     if (!value) return null;
@@ -28,8 +29,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       if (Array.isArray(value)) value.forEach(add);
       else if (!result.includes(value)) result.push(value);
     };
-    add(tile);
-    add(tile.items); add(tile.things); add(tile.objects); add(tile.topThing);
+    add(tile); add(tile.items); add(tile.things); add(tile.objects); add(tile.topThing);
     try { add(tile.getItems?.()); } catch (_) {}
     try { add(tile.getThings?.()); } catch (_) {}
     try { add(tile.getObjects?.()); } catch (_) {}
@@ -47,8 +47,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         definition?.name, definition?.properties?.name,
         definition?.properties?.field, definition?.properties?.type,
       ].filter(Boolean).join(" ").toLowerCase();
-      if (/\bfire\s*field\b/.test(text)) return true;
-      if (/\bfield\s*fire\b/.test(text)) return true;
+      if (FIRE_FIELD_PATTERN.test(text) || /\bfire\s*field\b/i.test(text)) return true;
     }
     return false;
   }
@@ -98,7 +97,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   }
 
   function getButtonDirection(button) {
-    const text = String(button?.textContent || "").replace(/\uFE0E|\uFE0F/g, "").replace(/\s+/g, "").toLowerCase();
+    const text = String(button?.textContent || "").replace(/[\uFE0E\uFE0F]/g, "").replace(/\s+/g, "").toLowerCase();
     const label = String(button?.getAttribute?.("aria-label") || button?.getAttribute?.("title") || button?.dataset?.direction || button?.dataset?.key || "").replace(/\s+/g, "").toLowerCase();
     if (["▲", "up", "north", "arrowup"].includes(text) || ["▲", "up", "north", "arrowup"].includes(label)) return "ArrowUp";
     if (["▶", "right", "east", "arrowright"].includes(text) || ["▶", "right", "east", "arrowright"].includes(label)) return "ArrowRight";
@@ -136,10 +135,6 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     return null;
   }
 
-  function pathUsesFire(path) {
-    return Array.isArray(path) && path.some((position) => isFireFieldTile(getTile(position)));
-  }
-
   function install() {
     const bot = window.minibiaBot;
     const pathfinder = window.gameClient?.world?.pathfinder;
@@ -156,13 +151,13 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const from = normalizePosition(fromValue || bot.getPlayerPosition?.());
       const to = normalizePosition(toValue);
       const waypoint = normalizePosition(caveStatus.currentWaypoint);
-      if (!from || !to || !waypoint || to.x !== waypoint.x || to.y !== waypoint.y || to.z !== waypoint.z) {
+      if (!from || !to || !waypoint || to.z !== waypoint.z || to.x !== waypoint.x || to.y !== waypoint.y) {
         return originalFindPath.call(this, fromValue, toValue, ...args);
       }
 
       const tolerance = Math.max(1, Number(caveStatus.config.waypointTolerance) || 1);
       const customPath = findPath(from, to, tolerance);
-      if (!customPath || customPath.length < 2 || !pathUsesFire(customPath)) {
+      if (!customPath || customPath.length < 2) {
         return originalFindPath.call(this, fromValue, toValue, ...args);
       }
 
@@ -171,6 +166,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const button = key ? findDpadButtons()?.[key] : null;
       if (!button) return originalFindPath.call(this, fromValue, toValue, ...args);
       try {
+        // Use the same D-pad movement mechanism as CaveBot Arrow / D-pad mode.
         button.click();
         return true;
       } catch (_) {
