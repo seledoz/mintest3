@@ -1,27 +1,24 @@
 window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 (function installGlobalCaveFieldPathing() {
-  const state = { timerId: null, patched: false, originalFindPath: null, pathfinder: null };
-
-  // Match the field IDs already used by CaveBot Arrow / D-pad pathing.
-  const FIRE_FIELD_IDS = new Set([1487, 1488, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1500, 1501, 1502]);
+  const FIRE_FIELD_IDS = new Set([
+    1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495,
+    1496, 1500, 1501, 1502,
+  ]);
   const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
-
-  function normalizePosition(value) {
-    if (!value) return null;
-    const x = Number(value.x), y = Number(value.y), z = Number(value.z);
-    if (![x, y, z].every(Number.isFinite)) return null;
-    return { x: Math.trunc(x), y: Math.trunc(y), z: Math.trunc(z) };
-  }
+  const state = { timerId: null, installed: false, patchedTiles: new Set() };
 
   function getDefinition(thing) {
-    const id = Number(thing?.id);
+    const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
     if (!Number.isFinite(id)) return null;
     const client = window.gameClient;
-    return client?.itemDefinitionsByCid?.[id] || client?.itemDefinitionsBySid?.[id] || client?.itemDefinitions?.[id] || null;
+    return client?.itemDefinitionsByCid?.[id]
+      || client?.itemDefinitionsBySid?.[id]
+      || client?.itemDefinitions?.[id]
+      || null;
   }
 
-  function thingsForTile(tile) {
+  function getThings(tile) {
     if (!tile) return [];
     const result = [];
     const add = (value) => {
@@ -29,7 +26,11 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       if (Array.isArray(value)) value.forEach(add);
       else if (!result.includes(value)) result.push(value);
     };
-    add(tile); add(tile.items); add(tile.things); add(tile.objects); add(tile.topThing);
+    add(tile);
+    add(tile.items);
+    add(tile.things);
+    add(tile.objects);
+    add(tile.topThing);
     try { add(tile.getItems?.()); } catch (_) {}
     try { add(tile.getThings?.()); } catch (_) {}
     try { add(tile.getObjects?.()); } catch (_) {}
@@ -38,148 +39,107 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   }
 
   function isFireFieldTile(tile) {
-    for (const thing of thingsForTile(tile)) {
-      const id = Number(thing?.id);
+    for (const thing of getThings(tile)) {
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
       if (FIRE_FIELD_IDS.has(id)) return true;
       const definition = getDefinition(thing);
       const text = [
-        thing?.name, thing?.field, thing?.type,
+        thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
+        thing?.type, thing?.thingType, thing?.category,
         definition?.name, definition?.properties?.name,
         definition?.properties?.field, definition?.properties?.type,
-      ].filter(Boolean).join(" ").toLowerCase();
+        definition?.properties?.category,
+      ].filter(Boolean).map(String).join(" ");
       if (FIRE_FIELD_PATTERN.test(text) || /\bfire\s*field\b/i.test(text)) return true;
     }
     return false;
   }
 
-  function getTile(position) {
-    const p = normalizePosition(position);
-    if (!p) return null;
+  function getLoadedTiles() {
+    const chunks = window.gameClient?.world?.chunks || [];
+    const tiles = [];
+    for (const chunk of chunks) {
+      if (!Array.isArray(chunk?.tiles)) continue;
+      for (const tile of chunk.tiles) if (tile) tiles.push(tile);
+    }
+    return tiles;
+  }
+
+  function patchTile(tile, bot) {
+    if (!tile || typeof tile.isWalkable !== "function") return false;
+    if (tile.isWalkable.__globalCaveFieldWalkable) return true;
+    const original = tile.isWalkable;
+    const wrapper = function globalCaveFieldWalkable(...args) {
+      const status = bot.cave?.status?.();
+      if (status?.config?.walkOverFields && isFireFieldTile(this)) return true;
+      return original.apply(this, args);
+    };
+    wrapper.__globalCaveFieldWalkable = true;
+    wrapper.__globalCaveFieldOriginal = original;
+    tile.isWalkable = wrapper;
+    state.patchedTiles.add(tile);
+    return true;
+  }
+
+  function patchPrototype(bot) {
+    const position = bot.getPlayerPosition?.();
+    if (!position) return false;
+    let tile = null;
     try {
-      return window.gameClient?.world?.getTileFromWorldPosition?.(new Position(p.x, p.y, p.z)) || null;
-    } catch (_) { return null; }
+      tile = window.gameClient?.world?.getTileFromWorldPosition?.(
+        new Position(Number(position.x), Number(position.y), Number(position.z))
+      );
+    } catch (_) {}
+    const prototype = tile && Object.getPrototypeOf(tile);
+    if (!prototype || typeof prototype.isWalkable !== "function") return false;
+    if (prototype.isWalkable.__globalCaveFieldWalkable) return true;
+
+    const original = prototype.isWalkable;
+    const wrapper = function globalCaveFieldPrototypeWalkable(...args) {
+      const status = bot.cave?.status?.();
+      if (status?.config?.walkOverFields && isFireFieldTile(this)) return true;
+      return original.apply(this, args);
+    };
+    wrapper.__globalCaveFieldWalkable = true;
+    wrapper.__globalCaveFieldOriginal = original;
+    prototype.isWalkable = wrapper;
+    return true;
   }
 
-  function isPassable(position, startKey) {
-    const tile = getTile(position);
-    if (!tile) return false;
-    if (startKey === `${position.x},${position.y}`) return true;
-    if (isFireFieldTile(tile)) return true;
-    try { return !!tile.isWalkable?.(); } catch (_) { return false; }
-  }
-
-  function findPath(start, goal, tolerance) {
-    const from = normalizePosition(start), to = normalizePosition(goal);
-    if (!from || !to || from.z !== to.z) return null;
-    const startKey = `${from.x},${from.y}`;
-    const queue = [{ x: from.x, y: from.y, z: from.z, parent: null }];
-    const visited = new Set([startKey]);
-    const dirs = [
-      { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 },
-    ];
-
-    for (let index = 0; index < queue.length; index += 1) {
-      const current = queue[index];
-      if (Math.max(Math.abs(current.x - to.x), Math.abs(current.y - to.y)) <= tolerance) {
-        const path = [];
-        for (let node = current; node; node = node.parent) path.unshift({ x: node.x, y: node.y, z: node.z });
-        return path;
-      }
-      for (const dir of dirs) {
-        const next = { x: current.x + dir.x, y: current.y + dir.y, z: current.z };
-        const key = `${next.x},${next.y}`;
-        if (visited.has(key) || !isPassable(next, startKey)) continue;
-        visited.add(key);
-        queue.push({ ...next, parent: current });
-      }
+  function patchAllLoadedTiles(bot) {
+    patchPrototype(bot);
+    for (const tile of getLoadedTiles()) {
+      if (isFireFieldTile(tile)) patchTile(tile, bot);
     }
-    return null;
   }
 
-  function getButtonDirection(button) {
-    const text = String(button?.textContent || "").replace(/[\uFE0E\uFE0F]/g, "").replace(/\s+/g, "").toLowerCase();
-    const label = String(button?.getAttribute?.("aria-label") || button?.getAttribute?.("title") || button?.dataset?.direction || button?.dataset?.key || "").replace(/\s+/g, "").toLowerCase();
-    if (["▲", "up", "north", "arrowup"].includes(text) || ["▲", "up", "north", "arrowup"].includes(label)) return "ArrowUp";
-    if (["▶", "right", "east", "arrowright"].includes(text) || ["▶", "right", "east", "arrowright"].includes(label)) return "ArrowRight";
-    if (["▼", "down", "south", "arrowdown"].includes(text) || ["▼", "down", "south", "arrowdown"].includes(label)) return "ArrowDown";
-    if (["◀", "left", "west", "arrowleft"].includes(text) || ["◀", "left", "west", "arrowleft"].includes(label)) return "ArrowLeft";
-    return null;
-  }
+  function installPathfinderGuard(bot) {
+    const pathfinder = window.gameClient?.world?.pathfinder;
+    if (!pathfinder || typeof pathfinder.findPath !== "function") return false;
+    if (pathfinder.findPath.__globalCaveFieldGuard) return true;
 
-  function findDpadButtons() {
-    const candidates = Array.from(document.querySelectorAll("button"))
-      .map((button) => ({ button, key: getButtonDirection(button) }))
-      .filter((entry) => entry.key);
-    for (const entry of candidates) {
-      let container = entry.button.parentElement;
-      for (let depth = 0; container && depth < 7; depth += 1, container = container.parentElement) {
-        const buttons = {};
-        for (const button of container.querySelectorAll("button")) {
-          const key = getButtonDirection(button);
-          if (key && !buttons[key]) buttons[key] = button;
-        }
-        if (Object.keys(buttons).length === 4) return buttons;
-      }
+    // Do not replace the game's movement/pathfinding algorithm. The only global
+    // change is making fire fields report as walkable while the toggle is ON.
+    // This keeps Game, Direct, Smart A, Smart A + Field Crossing and Arrow/D-pad
+    // on their native movement implementations.
+    const originalFindPath = pathfinder.findPath;
+    function guardedFindPath(...args) {
+      const status = bot.cave?.status?.();
+      if (status?.config?.walkOverFields) patchAllLoadedTiles(bot);
+      return originalFindPath.apply(this, args);
     }
-    const fallback = {};
-    for (const entry of candidates) if (!fallback[entry.key]) fallback[entry.key] = entry.button;
-    return Object.keys(fallback).length === 4 ? fallback : null;
-  }
-
-  function directionFor(from, to) {
-    const dx = to.x - from.x, dy = to.y - from.y;
-    if (dx === 1 && dy === 0) return "ArrowRight";
-    if (dx === -1 && dy === 0) return "ArrowLeft";
-    if (dx === 0 && dy === 1) return "ArrowDown";
-    if (dx === 0 && dy === -1) return "ArrowUp";
-    return null;
+    guardedFindPath.__globalCaveFieldGuard = true;
+    guardedFindPath.__globalCaveFieldOriginal = originalFindPath;
+    pathfinder.findPath = guardedFindPath;
+    return true;
   }
 
   function install() {
     const bot = window.minibiaBot;
-    const pathfinder = window.gameClient?.world?.pathfinder;
-    if (!bot?.cave || !pathfinder || typeof pathfinder.findPath !== "function") return false;
-    if (pathfinder.findPath.__globalCaveFieldPathingPatched) return true;
-
-    const originalFindPath = pathfinder.findPath;
-    function patchedFindPath(fromValue, toValue, ...args) {
-      const caveStatus = bot.cave?.status?.();
-      if (!caveStatus?.running || !caveStatus?.config?.walkOverFields) {
-        return originalFindPath.call(this, fromValue, toValue, ...args);
-      }
-
-      const from = normalizePosition(fromValue || bot.getPlayerPosition?.());
-      const to = normalizePosition(toValue);
-      const waypoint = normalizePosition(caveStatus.currentWaypoint);
-      if (!from || !to || !waypoint || to.z !== waypoint.z || to.x !== waypoint.x || to.y !== waypoint.y) {
-        return originalFindPath.call(this, fromValue, toValue, ...args);
-      }
-
-      const tolerance = Math.max(1, Number(caveStatus.config.waypointTolerance) || 1);
-      const customPath = findPath(from, to, tolerance);
-      if (!customPath || customPath.length < 2) {
-        return originalFindPath.call(this, fromValue, toValue, ...args);
-      }
-
-      const next = customPath[1];
-      const key = directionFor(from, next);
-      const button = key ? findDpadButtons()?.[key] : null;
-      if (!button) return originalFindPath.call(this, fromValue, toValue, ...args);
-      try {
-        // Use the same D-pad movement mechanism as CaveBot Arrow / D-pad mode.
-        button.click();
-        return true;
-      } catch (_) {
-        return originalFindPath.call(this, fromValue, toValue, ...args);
-      }
-    }
-
-    patchedFindPath.__globalCaveFieldPathingPatched = true;
-    patchedFindPath.__globalCaveFieldPathingOriginal = originalFindPath;
-    pathfinder.findPath = patchedFindPath;
-    state.patched = true;
-    state.originalFindPath = originalFindPath;
-    state.pathfinder = pathfinder;
+    if (!bot?.cave) return false;
+    patchAllLoadedTiles(bot);
+    installPathfinderGuard(bot);
+    state.installed = true;
     return true;
   }
 
