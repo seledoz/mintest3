@@ -7,7 +7,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
   const configStorageKey = "minibiaBot.cave.config";
   const presetFieldKey = "minibiaBot.cave.walkOverFieldsPresets";
-  const FIELD_IDS = new Set([1487, 1488, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1500, 1501]);
+  // Classic Tibia fire-field IDs, including the permanent/map variants.
+  const FIRE_FIELD_IDS = new Set([1487, 1488, 1489, 1492, 1493, 1494, 1500, 1501, 1502]);
 
   function normalizePosition(value) {
     if (!value) return null;
@@ -25,29 +26,36 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       || null;
   }
 
-  function isFieldThing(thing) {
+  function isFireFieldThing(thing) {
     if (!thing) return false;
     const id = Number(thing.id);
-    if (FIELD_IDS.has(id)) return true;
+    if (FIRE_FIELD_IDS.has(id)) return true;
     const definition = getThingDefinition(thing);
     const name = String(thing.name || definition?.properties?.name || "").trim().toLowerCase();
-    if (/\b(?:fire|poison|energy)\s+field\b/i.test(name)) return true;
+    if (/\bfire\s+field\b/i.test(name)) return true;
     const field = String(thing.field || definition?.properties?.field || "").trim().toLowerCase();
     const type = String(thing.type || definition?.properties?.type || "").trim().toLowerCase();
-    return ["fire", "poison", "energy"].includes(field) && (!type || type === "magicfield");
+    return field === "fire" && (!type || type === "magicfield");
   }
 
-  function tileHasField(tile) {
+  function tileHasFireField(tile) {
     if (!tile) return false;
-    const things = [tile, ...(Array.isArray(tile.items) ? tile.items : []), ...(Array.isArray(tile.things) ? tile.things : [])];
-    return things.some(isFieldThing);
+    const things = [
+      tile,
+      ...(Array.isArray(tile.items) ? tile.items : []),
+      ...(Array.isArray(tile.things) ? tile.things : []),
+      ...(Array.isArray(tile.objects) ? tile.objects : []),
+    ];
+    return things.some(isFireFieldThing);
   }
 
   function patchFieldTiles(bot, enabled) {
     const previous = bot.__caveWalkOverFieldsPatchedTiles || [];
     if (!enabled) {
       previous.forEach(({ tile, original }) => {
-        try { if (tile?.isWalkable?.__caveWalkOverFieldsWrapper) tile.isWalkable = original; } catch (_) {}
+        try {
+          if (tile?.isWalkable?.__caveWalkOverFieldsWrapper) tile.isWalkable = original;
+        } catch (_) {}
       });
       bot.__caveWalkOverFieldsPatchedTiles = [];
       return;
@@ -58,12 +66,12 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     for (const chunk of chunks) {
       if (!Array.isArray(chunk?.tiles)) continue;
       for (const tile of chunk.tiles) {
-        if (!tile || typeof tile.isWalkable !== "function" || !tileHasField(tile)) continue;
+        if (!tile || typeof tile.isWalkable !== "function" || !tileHasFireField(tile)) continue;
         if (tile.isWalkable.__caveWalkOverFieldsWrapper) continue;
         const original = tile.isWalkable;
         const wrapper = function caveWalkOverFieldsIsWalkable(...args) {
           const status = bot.cave?.status?.();
-          if (status?.running && status?.config?.walkOverFields) return true;
+          if (status?.config?.walkOverFields) return true;
           return original.apply(this, args);
         };
         wrapper.__caveWalkOverFieldsWrapper = true;
@@ -167,7 +175,12 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       patchFieldTiles(bot, !!bot.cave?.config?.walkOverFields);
     }, 500);
 
-    bot.caveWalkOverFields = { status: () => ({ enabled: !!bot.cave?.config?.walkOverFields, patchedTiles: bot.__caveWalkOverFieldsPatchedTiles?.length || 0 }) };
+    bot.caveWalkOverFields = {
+      status: () => ({
+        enabled: !!bot.cave?.config?.walkOverFields,
+        patchedTiles: bot.__caveWalkOverFieldsPatchedTiles?.length || 0,
+      }),
+    };
     bot.addCleanup?.(() => {
       window.clearInterval(scanTimerId);
       patchFieldTiles(bot, false);
@@ -200,7 +213,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         const position = { x: waypoint.x + dx, y: waypoint.y + dy, z: waypoint.z };
         const tile = window.gameClient?.world?.getTileFromWorldPosition?.(new Position(position.x, position.y, position.z));
         if (!tile) continue;
-        const walkable = walkOverFields && tileHasField(tile) ? true : !!tile.isWalkable?.();
+        const walkable = walkOverFields && tileHasFireField(tile) ? true : !!tile.isWalkable?.();
         if (!walkable) continue;
         candidates.push({
           position,
@@ -227,6 +240,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const waypoint = normalizePosition(caveStatus?.currentWaypoint);
       const configuredTolerance = Number(caveStatus?.config?.waypointTolerance);
       const tolerance = Math.max(1, Number.isFinite(configuredTolerance) ? configuredTolerance : 1);
+      const walkOverFields = !!caveStatus?.config?.walkOverFields;
 
       const isCurrentSameFloorWaypoint =
         from && to && waypoint &&
@@ -234,7 +248,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         to.x === waypoint.x && to.y === waypoint.y && to.z === waypoint.z;
 
       if (isCurrentSameFloorWaypoint && !isExactActionTile(waypoint)) {
-        const toleranceTarget = findClosestWalkableToleranceTile(from, waypoint, tolerance, !!caveStatus?.config?.walkOverFields);
+        const toleranceTarget = findClosestWalkableToleranceTile(from, waypoint, tolerance, walkOverFields);
         if (toleranceTarget) {
           const adjustedTarget = new Position(toleranceTarget.x, toleranceTarget.y, toleranceTarget.z);
           return originalFindPath.call(this, fromValue, adjustedTarget, ...args);
@@ -276,7 +290,6 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   patchedInstallCaveModule.__originalInstallCaveModule = originalInstallCaveModule;
   bundle.installCaveModule = patchedInstallCaveModule;
 
-  // The panel is installed later by main.js. Inject the toggle once the CaveBot UI exists.
   const panelTimerId = window.setInterval(() => {
     const bot = window.minibiaBot;
     const mode = document.getElementById("minibia-bot-cave-pathfinder-mode");
