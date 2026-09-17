@@ -3,7 +3,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 (function installGlobalCaveFieldPathing() {
   const state = { timerId: null, patched: false, originalFindPath: null, pathfinder: null };
 
-  const FIRE_FIELD_IDS = new Set([1487, 1488, 1489, 1492, 1493, 1494, 1500, 1501, 1502]);
+  // Keep this list aligned with CaveBot's existing D-pad field handling.
+  const FIRE_FIELD_IDS = new Set([1487, 1488, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1500, 1501, 1502]);
 
   function normalizePosition(value) {
     if (!value) return null;
@@ -96,20 +97,34 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     return null;
   }
 
-  function findDpadButton(key) {
-    const values = Array.from(document.querySelectorAll("button"));
-    const wanted = {
-      ArrowUp: ["▲", "up", "north", "arrowup"],
-      ArrowRight: ["▶", "right", "east", "arrowright"],
-      ArrowDown: ["▼", "down", "south", "arrowdown"],
-      ArrowLeft: ["◀", "left", "west", "arrowleft"],
-    }[key] || [];
-    for (const button of values) {
-      const text = String(button.textContent || "").replace(/\s+/g, "").toLowerCase();
-      const label = String(button.getAttribute("aria-label") || button.getAttribute("title") || button.dataset.direction || button.dataset.key || "").replace(/\s+/g, "").toLowerCase();
-      if (wanted.includes(text) || wanted.includes(label)) return button;
-    }
+  function getButtonDirection(button) {
+    const text = String(button?.textContent || "").replace(/\uFE0E|\uFE0F/g, "").replace(/\s+/g, "").toLowerCase();
+    const label = String(button?.getAttribute?.("aria-label") || button?.getAttribute?.("title") || button?.dataset?.direction || button?.dataset?.key || "").replace(/\s+/g, "").toLowerCase();
+    if (["▲", "up", "north", "arrowup"].includes(text) || ["▲", "up", "north", "arrowup"].includes(label)) return "ArrowUp";
+    if (["▶", "right", "east", "arrowright"].includes(text) || ["▶", "right", "east", "arrowright"].includes(label)) return "ArrowRight";
+    if (["▼", "down", "south", "arrowdown"].includes(text) || ["▼", "down", "south", "arrowdown"].includes(label)) return "ArrowDown";
+    if (["◀", "left", "west", "arrowleft"].includes(text) || ["◀", "left", "west", "arrowleft"].includes(label)) return "ArrowLeft";
     return null;
+  }
+
+  function findDpadButtons() {
+    const candidates = Array.from(document.querySelectorAll("button"))
+      .map((button) => ({ button, key: getButtonDirection(button) }))
+      .filter((entry) => entry.key);
+    for (const entry of candidates) {
+      let container = entry.button.parentElement;
+      for (let depth = 0; container && depth < 7; depth += 1, container = container.parentElement) {
+        const buttons = {};
+        for (const button of container.querySelectorAll("button")) {
+          const key = getButtonDirection(button);
+          if (key && !buttons[key]) buttons[key] = button;
+        }
+        if (Object.keys(buttons).length === 4) return buttons;
+      }
+    }
+    const fallback = {};
+    for (const entry of candidates) if (!fallback[entry.key]) fallback[entry.key] = entry.button;
+    return Object.keys(fallback).length === 4 ? fallback : null;
   }
 
   function directionFor(from, to) {
@@ -153,7 +168,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
       const next = customPath[1];
       const key = directionFor(from, next);
-      const button = key ? findDpadButton(key) : null;
+      const button = key ? findDpadButtons()?.[key] : null;
       if (!button) return originalFindPath.call(this, fromValue, toValue, ...args);
       try {
         button.click();
