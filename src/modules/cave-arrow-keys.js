@@ -21,7 +21,6 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrowKeysModule(bot) {
   if (!bot) return null;
 
-  // Never keep an old module instance alive across source-loader reloads.
   if (bot.caveArrowKeys?.destroy) {
     try { bot.caveArrowKeys.destroy(); } catch (_) {}
     bot.caveArrowKeys = null;
@@ -45,10 +44,9 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     dpadButtons: null,
   };
 
-  // D-walk owns only Arrow/D-pad mode. Smart A/Game/Direct are never intercepted.
   const config = { matrixCacheMs: 250, stepRetryMs: 250, maxStepRetries: 3 };
   const matrixCache = new Map();
-  const damagingFieldIds = new Set([1487, 1488, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1500, 1501]);
+  const damagingFieldIds = new Set([1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1500, 1501, 1502]);
   const damagingFieldPattern = /(?:fire|poison|energy)\s*(?:field|wall|damage|ground|tile)/i;
 
   function normalizePosition(value) {
@@ -63,9 +61,13 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     return !!a && !!b && a.x === b.x && a.y === b.y && a.z === b.z;
   }
 
-  function isArrowModeActive(to) {
+  function isArrowModeActive() {
     const caveStatus = bot.cave?.status?.() || null;
-    return !!(caveStatus?.running && caveStatus?.config?.pathfinderMode === "arrow" && caveStatus.currentWaypoint && sameTile(to, caveStatus.currentWaypoint));
+    return !!(caveStatus?.running && caveStatus?.config?.pathfinderMode === "arrow");
+  }
+
+  function isWalkOverFieldsEnabled() {
+    return !!bot.cave?.status?.()?.config?.walkOverFields;
   }
 
   function getThingDefinition(id) {
@@ -108,7 +110,8 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
 
   function isDWalkPassable(tile) {
     if (!tile) return false;
-    if (getDamagingFieldName(tile)) return true;
+    const fieldName = getDamagingFieldName(tile);
+    if (fieldName && isWalkOverFieldsEnabled()) return true;
     try { return typeof tile.isWalkable === "function" && tile.isWalkable(); } catch (_) { return false; }
   }
 
@@ -119,7 +122,7 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
   }
 
   function getMatrix(z, start, goal) {
-    const cacheKey = String(z);
+    const cacheKey = `${z}:${isWalkOverFieldsEnabled() ? 1 : 0}`;
     const cached = matrixCache.get(cacheKey);
     if (cached && Date.now() - cached.at <= config.matrixCacheMs) {
       for (const p of [start, goal]) {
@@ -171,7 +174,8 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     const matrix = getMatrix(from.z, from, to);
     matrix.set(`${from.x},${from.y}`, { passable: true, field: !!getDamagingFieldName(getTileAt(from)) });
     const destinationTile = getTileAt(to);
-    if (destinationTile && getDamagingFieldName(destinationTile)) matrix.set(`${to.x},${to.y}`, { passable: true, field: true });
+    const destinationField = !!getDamagingFieldName(destinationTile);
+    matrix.set(`${to.x},${to.y}`, { passable: destinationField && isWalkOverFieldsEnabled() ? true : !!matrix.get(`${to.x},${to.y}`)?.passable, field: destinationField });
 
     const tolerance = Math.max(1, Number(bot.cave?.status?.()?.config?.waypointTolerance) || 0);
     const open = [{ ...from, g: 0, f: heuristic(from, to), parent: null }];
@@ -286,7 +290,7 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     state.originalFindPath = originalFindPath;
 
     function patchedFindPath(fromValue, toValue, ...args) {
-      if (!isArrowModeActive(toValue)) return originalFindPath.call(this, fromValue, toValue, ...args);
+      if (!isArrowModeActive()) return originalFindPath.call(this, fromValue, toValue, ...args);
       const from = normalizePosition(fromValue), to = normalizePosition(toValue);
       if (!from || !to || from.z !== to.z) return originalFindPath.call(this, fromValue, toValue, ...args);
       const pending = handlePendingStep(from, to);
