@@ -69,6 +69,18 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     }
   }
 
+  function clearNativePathCache(bot) {
+    try {
+      window.gameClient?.world?.pathfinder?.setPathfindCache?.(null);
+    } catch (_) {}
+    try {
+      window.gameClient?.world?.pathfinder?.clearCache?.();
+    } catch (_) {}
+    try {
+      bot.cave?.clearPathCache?.();
+    } catch (_) {}
+  }
+
   function patchFieldPrototype(bot) {
     const player = normalizePosition(bot.getPlayerPosition?.());
     const tile = getTile(player);
@@ -122,6 +134,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const next = { ...nextConfig };
       if (Object.prototype.hasOwnProperty.call(next, "walkOverFields")) next.walkOverFields = !!next.walkOverFields;
       const result = originalUpdateConfig(next);
+      clearNativePathCache(bot);
       if (result?.walkOverFields) patchFieldPrototype(bot);
       else restoreFieldPrototype(bot);
       syncWalkOverFieldsControl(bot);
@@ -136,14 +149,20 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
     if (originalGoToWaypoint) {
       bot.cave.goToWaypoint = function patchedGoToWaypoint(waypoint) {
-        if (bot.cave.config.walkOverFields) patchFieldPrototype(bot);
+        if (bot.cave.config.walkOverFields) {
+          patchFieldPrototype(bot);
+          clearNativePathCache(bot);
+        }
         return originalGoToWaypoint(waypoint);
       };
     }
 
     if (originalGoToPosition) {
       bot.cave.goToPosition = function patchedGoToPosition(position) {
-        if (bot.cave.config.walkOverFields) patchFieldPrototype(bot);
+        if (bot.cave.config.walkOverFields) {
+          patchFieldPrototype(bot);
+          clearNativePathCache(bot);
+        }
         return originalGoToPosition(position);
       };
     }
@@ -172,6 +191,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
             originalUpdateConfig({ walkOverFields: !!settings[result.name] });
           }
         }
+        clearNativePathCache(bot);
         if (bot.cave.config.walkOverFields) patchFieldPrototype(bot);
         else restoreFieldPrototype(bot);
         syncWalkOverFieldsControl(bot);
@@ -242,7 +262,10 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const originalFindPath = pathfinder.findPath;
 
     function findPathWithWaypointTolerance(fromValue, toValue, ...args) {
-      if (bot.cave?.config?.walkOverFields) patchFieldPrototype(bot);
+      if (bot.cave?.config?.walkOverFields) {
+        patchFieldPrototype(bot);
+        clearNativePathCache(bot);
+      }
       const from = normalizePosition(fromValue);
       const to = normalizePosition(toValue);
       const caveStatus = bot.cave?.status?.() || null;
