@@ -63,8 +63,7 @@
     "src/modules/xray-overlay-floor-mode.js",
     "src/modules/rune-maker-drop-inspector.js",
     "src/modules/github-waypoint-delete-button.js",
-    "src/modules/profiles.js",
-    "src/modules/cave-walk-over-fields-global.js",
+    "src/modules/profiles.js"
   ];
 
   function purgeLegacyCaveWaitDelay() {
