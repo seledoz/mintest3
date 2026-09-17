@@ -7,7 +7,6 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
   const configStorageKey = "minibiaBot.cave.config";
   const presetFieldKey = "minibiaBot.cave.walkOverFieldsPresets";
-  // Classic Tibia fire-field IDs, including the permanent/map variants.
   const FIRE_FIELD_IDS = new Set([1487, 1488, 1489, 1492, 1493, 1494, 1500, 1501, 1502]);
 
   function normalizePosition(value) {
@@ -26,30 +25,64 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       || null;
   }
 
+  function getTileThings(tile) {
+    if (!tile) return [];
+    const result = [tile];
+    const accessors = ["getThings", "getItems", "getObjects"];
+    for (const accessor of accessors) {
+      try {
+        const value = tile?.[accessor]?.();
+        if (Array.isArray(value)) result.push(...value);
+      } catch (_) {}
+    }
+    for (const key of ["items", "things", "objects"]) {
+      if (Array.isArray(tile?.[key])) result.push(...tile[key]);
+    }
+    return result;
+  }
+
   function isFireFieldThing(thing) {
     if (!thing) return false;
-    const id = Number(thing.id);
+    const id = Number(thing.id ?? thing.itemId ?? thing.serverId ?? thing.clientId);
     if (FIRE_FIELD_IDS.has(id)) return true;
     const definition = getThingDefinition(thing);
-    const name = String(thing.name || definition?.properties?.name || "").trim().toLowerCase();
-    if (/\bfire\s+field\b/i.test(name)) return true;
-    const field = String(thing.field || definition?.properties?.field || "").trim().toLowerCase();
-    const type = String(thing.type || definition?.properties?.type || "").trim().toLowerCase();
-    return field === "fire" && (!type || type === "magicfield");
+    const name = String(
+      thing.name || thing.itemName || definition?.name || definition?.properties?.name || ""
+    ).trim().toLowerCase();
+    if (/\bfire\s*field\b/i.test(name)) return true;
+    const field = String(thing.field ?? thing.fieldType ?? definition?.properties?.field ?? "").trim().toLowerCase();
+    const type = String(thing.type ?? thing.thingType ?? definition?.properties?.type ?? "").trim().toLowerCase();
+    return field === "fire" || (type.includes("magic") && type.includes("field") && /fire/i.test(name));
   }
 
   function tileHasFireField(tile) {
-    if (!tile) return false;
-    const things = [
-      tile,
-      ...(Array.isArray(tile.items) ? tile.items : []),
-      ...(Array.isArray(tile.things) ? tile.things : []),
-      ...(Array.isArray(tile.objects) ? tile.objects : []),
-    ];
-    return things.some(isFireFieldThing);
+    return getTileThings(tile).some(isFireFieldThing);
+  }
+
+  function patchFieldPrototype(bot, enabled) {
+    const tile = window.gameClient?.world?.getTileFromWorldPosition?.(
+      new Position(bot.getPlayerPosition?.()?.x || 0, bot.getPlayerPosition?.()?.y || 0, bot.getPlayerPosition?.()?.z || 0)
+    );
+    const prototype = tile && Object.getPrototypeOf(tile);
+    if (!prototype || typeof prototype.isWalkable !== "function") return false;
+
+    if (!prototype.__caveWalkOverFieldsOriginalIsWalkable) {
+      const original = prototype.isWalkable;
+      const wrapper = function caveWalkOverFieldsPrototypeIsWalkable(...args) {
+        const status = bot.cave?.status?.();
+        if (status?.config?.walkOverFields && tileHasFireField(this)) return true;
+        return original.apply(this, args);
+      };
+      wrapper.__caveWalkOverFieldsWrapper = true;
+      prototype.__caveWalkOverFieldsOriginalIsWalkable = original;
+      prototype.isWalkable = wrapper;
+    }
+
+    return true;
   }
 
   function patchFieldTiles(bot, enabled) {
+    patchFieldPrototype(bot, enabled);
     const previous = bot.__caveWalkOverFieldsPatchedTiles || [];
     if (!enabled) {
       previous.forEach(({ tile, original }) => {
@@ -71,7 +104,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         const original = tile.isWalkable;
         const wrapper = function caveWalkOverFieldsIsWalkable(...args) {
           const status = bot.cave?.status?.();
-          if (status?.config?.walkOverFields) return true;
+          if (status?.config?.walkOverFields && tileHasFireField(this)) return true;
           return original.apply(this, args);
         };
         wrapper.__caveWalkOverFieldsWrapper = true;
@@ -131,9 +164,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         const result = originalLoadPreset(name);
         if (result?.name) {
           const settings = readPresetSettings();
-          if (Object.prototype.hasOwnProperty.call(settings, result.name)) {
-            originalUpdateConfig({ walkOverFields: !!settings[result.name] });
-          }
+          if (Object.prototype.hasOwnProperty.call(settings, result.name)) originalUpdateConfig({ walkOverFields: !!settings[result.name] });
         }
         patchFieldTiles(bot, !!bot.cave.config.walkOverFields);
         syncWalkOverFieldsControl(bot);
@@ -167,19 +198,12 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
     const activePresetName = bot.cave.getActivePresetName?.();
     const settings = readPresetSettings();
-    if (activePresetName && Object.prototype.hasOwnProperty.call(settings, activePresetName)) {
-      originalUpdateConfig({ walkOverFields: !!settings[activePresetName] });
-    }
+    if (activePresetName && Object.prototype.hasOwnProperty.call(settings, activePresetName)) originalUpdateConfig({ walkOverFields: !!settings[activePresetName] });
 
-    const scanTimerId = window.setInterval(() => {
-      patchFieldTiles(bot, !!bot.cave?.config?.walkOverFields);
-    }, 500);
+    const scanTimerId = window.setInterval(() => patchFieldTiles(bot, !!bot.cave?.config?.walkOverFields), 500);
 
     bot.caveWalkOverFields = {
-      status: () => ({
-        enabled: !!bot.cave?.config?.walkOverFields,
-        patchedTiles: bot.__caveWalkOverFieldsPatchedTiles?.length || 0,
-      }),
+      status: () => ({ enabled: !!bot.cave?.config?.walkOverFields, patchedTiles: bot.__caveWalkOverFieldsPatchedTiles?.length || 0 }),
     };
     bot.addCleanup?.(() => {
       window.clearInterval(scanTimerId);
@@ -197,8 +221,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   function isExactActionTile(position) {
     const tile = position ? window.gameClient?.world?.getTileFromWorldPosition?.(new Position(position.x, position.y, position.z)) : null;
     if (!tile) return false;
-    const things = [tile, ...(Array.isArray(tile.items) ? tile.items : [])];
-    return things.some((thing) => {
+    return getTileThings(tile).some((thing) => {
       const definition = getThingDefinition(thing);
       const name = getThingName(thing);
       return !!definition?.properties?.floorchange || /\b(ladder|stairs|hole|rope spot|door|teleport)\b/i.test(name);
@@ -215,11 +238,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         if (!tile) continue;
         const walkable = walkOverFields && tileHasFireField(tile) ? true : !!tile.isWalkable?.();
         if (!walkable) continue;
-        candidates.push({
-          position,
-          distanceFromPlayer: Math.abs(position.x - from.x) + Math.abs(position.y - from.y),
-          distanceFromWaypoint: Math.max(Math.abs(dx), Math.abs(dy)),
-        });
+        candidates.push({ position, distanceFromPlayer: Math.abs(position.x - from.x) + Math.abs(position.y - from.y), distanceFromWaypoint: Math.max(Math.abs(dx), Math.abs(dy)) });
       }
     }
     candidates.sort((a, b) => a.distanceFromPlayer - b.distanceFromPlayer || a.distanceFromWaypoint - b.distanceFromWaypoint);
@@ -230,7 +249,6 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const pathfinder = window.gameClient?.world?.pathfinder;
     if (!pathfinder || typeof pathfinder.findPath !== "function") return false;
     if (pathfinder.findPath.__caveWaypointTolerancePatched) return true;
-
     const originalFindPath = pathfinder.findPath;
 
     function findPathWithWaypointTolerance(fromValue, toValue, ...args) {
@@ -241,20 +259,11 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const configuredTolerance = Number(caveStatus?.config?.waypointTolerance);
       const tolerance = Math.max(1, Number.isFinite(configuredTolerance) ? configuredTolerance : 1);
       const walkOverFields = !!caveStatus?.config?.walkOverFields;
-
-      const isCurrentSameFloorWaypoint =
-        from && to && waypoint &&
-        from.z === waypoint.z &&
-        to.x === waypoint.x && to.y === waypoint.y && to.z === waypoint.z;
-
+      const isCurrentSameFloorWaypoint = from && to && waypoint && from.z === waypoint.z && to.x === waypoint.x && to.y === waypoint.y && to.z === waypoint.z;
       if (isCurrentSameFloorWaypoint && !isExactActionTile(waypoint)) {
         const toleranceTarget = findClosestWalkableToleranceTile(from, waypoint, tolerance, walkOverFields);
-        if (toleranceTarget) {
-          const adjustedTarget = new Position(toleranceTarget.x, toleranceTarget.y, toleranceTarget.z);
-          return originalFindPath.call(this, fromValue, adjustedTarget, ...args);
-        }
+        if (toleranceTarget) return originalFindPath.call(this, fromValue, new Position(toleranceTarget.x, toleranceTarget.y, toleranceTarget.z), ...args);
       }
-
       return originalFindPath.call(this, fromValue, toValue, ...args);
     }
 
@@ -266,15 +275,9 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
   function patchedInstallCaveModule(bot) {
     const savedConfig = bot.storage.get(configStorageKey, {}) || {};
-    bot.storage.set(configStorageKey, {
-      ...savedConfig,
-      waypointTolerance: Math.max(1, Number(savedConfig.waypointTolerance) || 1),
-      walkOverFields: !!savedConfig.walkOverFields,
-    });
-
+    bot.storage.set(configStorageKey, { ...savedConfig, waypointTolerance: Math.max(1, Number(savedConfig.waypointTolerance) || 1), walkOverFields: !!savedConfig.walkOverFields });
     const result = originalInstallCaveModule(bot);
     if (bot.cave) patchCaveInstance(bot);
-
     if (!patchGamePathfinder(bot)) {
       let attempts = 0;
       const timerId = window.setInterval(() => {
