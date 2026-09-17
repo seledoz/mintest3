@@ -1,7 +1,7 @@
 ## Public repository
 
 ```js
-fetch("https://raw.githubusercontent.com/seledoz/mintest2/main/pz-bot.js?t=" + Date.now())
+fetch("https://raw.githubusercontent.com/seledoz/mintest3/main/pz-bot.js?t=" + Date.now())
   .then((r) => r.text())
   .then((code) => eval(code));
 ```
@@ -15,13 +15,10 @@ Use a fine-grained GitHub token with read and write access to the repository con
   const token = prompt("Paste your GitHub token:")?.trim();
   if (!token) return;
 
-  const repository = "seledoz/mintest2";
-  const legacyRepository = "seledoz/Min-new";
+  const repository = "seledoz/mintest3";
   const ref = "main";
   const rawPrefix = `https://raw.githubusercontent.com/${repository}/${ref}/`;
-  const legacyRawPrefix = `https://raw.githubusercontent.com/${legacyRepository}/${ref}/`;
   const apiPrefix = `https://api.github.com/repos/${repository}/contents`;
-  const legacyApiPrefix = `https://api.github.com/repos/${legacyRepository}/contents`;
   const originalFetch = window.fetch.bind(window);
 
   function githubHeaders(existingHeaders, accept = "application/vnd.github+json") {
@@ -32,13 +29,12 @@ Use a fine-grained GitHub token with read and write access to the repository con
     return headers;
   }
 
-  function rawToApi(url, prefix) {
-    const path = url.slice(prefix.length).split("?")[0];
+  function rawToApi(url) {
+    const path = url.slice(rawPrefix.length).split("?")[0];
     return `${apiPrefix}/${path}?ref=${encodeURIComponent(ref)}&t=${Date.now()}`;
   }
 
-  // Authenticate all mintest2 GitHub requests and transparently redirect
-  // leftover Min-new waypoint-library requests to mintest2.
+  // Authenticate mintest3 GitHub requests.
   window.fetch = function authenticatedPrivateRepoFetch(input, init = {}) {
     const url = typeof input === "string" ? input : input?.url;
     if (!url) return originalFetch(input, init);
@@ -47,13 +43,8 @@ Use a fine-grained GitHub token with read and write access to the repository con
     let accept = "application/vnd.github+json";
 
     if (url.startsWith(rawPrefix)) {
-      nextUrl = rawToApi(url, rawPrefix);
+      nextUrl = rawToApi(url);
       accept = "application/vnd.github.raw+json";
-    } else if (url.startsWith(legacyRawPrefix)) {
-      nextUrl = rawToApi(url, legacyRawPrefix);
-      accept = "application/vnd.github.raw+json";
-    } else if (url.startsWith(legacyApiPrefix)) {
-      nextUrl = apiPrefix + url.slice(legacyApiPrefix.length);
     } else if (!url.startsWith(apiPrefix)) {
       return originalFetch(input, init);
     }
