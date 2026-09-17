@@ -32,6 +32,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     ropePendingTarget: null,
     ropePendingSince: 0,
     ropeRetryCount: 0,
+    ropeLockedTarget: null,
     pausedForCombat: false,
     tickCount: 0,
   };
@@ -999,6 +1000,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     state.ropePendingTarget = null;
     state.ropePendingSince = 0;
     state.ropeRetryCount = 0;
+    state.ropeLockedTarget = null;
   }
 
   function setRopePending(targetPosition, now) {
@@ -1067,12 +1069,58 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       clearRopePending();
     }
 
+    // Once a rope target has been selected, stay locked to that exact tile.
+    // Do not rescan the surrounding holes/rope spots on every 200ms CaveBot tick.
+    if (waypoint.z < position.z && state.ropeLockedTarget) {
+      const lockedTarget = normalizePosition(state.ropeLockedTarget);
+      const lockedTile = getTileAt(lockedTarget);
+      if (lockedTarget && lockedTarget.z === position.z && lockedTile && isRopeTargetTile(lockedTile)) {
+        const moved = useFloorChangeTile(
+          { tile: lockedTile, position: lockedTarget },
+          waypoint,
+          now
+        );
+        if (moved) {
+          bot.logDebug("cave using locked rope transition tile", {
+            tileX: lockedTarget.x,
+            tileY: lockedTarget.y,
+            tileZ: lockedTarget.z,
+            targetZ: waypoint.z,
+          });
+          return true;
+        }
+      } else {
+        bot.log("cave locked rope target became invalid, reacquiring", {
+          source: lockedTarget,
+          targetZ: waypoint.z,
+        });
+        state.ropeLockedTarget = null;
+      }
+    }
+
     const visibleCandidate = findNearbyTransitionTile(position, waypoint);
     if (visibleCandidate) {
+      if (waypoint.z < position.z && isRopeTargetTile(visibleCandidate.tile)) {
+        state.ropeLockedTarget = normalizePosition(visibleCandidate.position);
+        bot.log("cave locked rope transition tile", {
+          tileX: visibleCandidate.position.x,
+          tileY: visibleCandidate.position.y,
+          tileZ: visibleCandidate.position.z,
+          targetZ: waypoint.z,
+        });
+      }
       const moved = useFloorChangeTile(visibleCandidate, waypoint, now);
       if (moved) {
-        bot.log("cave probing visible floor-change tile", { tileX: visibleCandidate.position.x, tileY: visibleCandidate.position.y, tileZ: visibleCandidate.position.z, targetZ: waypoint.z });
+        bot.logDebug("cave using selected floor-change tile", {
+          tileX: visibleCandidate.position.x,
+          tileY: visibleCandidate.position.y,
+          tileZ: visibleCandidate.position.z,
+          targetZ: waypoint.z,
+        });
         return true;
+      }
+      if (waypoint.z < position.z && isRopeTargetTile(visibleCandidate.tile)) {
+        state.ropeLockedTarget = null;
       }
     }
     const knownTransition = findBestKnownTransition(position, waypoint);
