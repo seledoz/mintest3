@@ -64,6 +64,7 @@
     "src/modules/rune-maker-drop-inspector.js",
     "src/modules/github-waypoint-delete-button.js",
     "src/modules/profiles.js",
+    "src/modules/cave-walk-over-fields-global.js",
   ];
 
   function purgeLegacyCaveWaitDelay() {
