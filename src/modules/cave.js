@@ -29,11 +29,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     lastStairsUseAt: 0,
     lastObservedPosition: null,
     pendingTransitionSource: null,
-    ropePendingTarget: null,
-    ropePendingSince: 0,
-    ropeRetryCount: 0,
-    ropeLockedTarget: null,
-    ropeLockedApproach: null,
     pausedForCombat: false,
     tickCount: 0,
   };
@@ -930,9 +925,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const source = resolveObservedTransitionSource(previous);
       if (source) upsertTransition(source, current);
       state.pendingTransitionSource = null;
-      clearRopePending();
-      state.ropeLockedTarget = null;
-      state.ropeLockedApproach = null;
     }
     state.lastObservedPosition = current;
   }
@@ -978,51 +970,22 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
   function findRopeSource() { return findToolSource(isRopeItem); }
   function findShovelSource() { return findToolSource(isShovelItem); }
-  function useToolOnTile(tool, targetTile, targetPosition, actionLabel, now = Date.now(), lockedApproach = null) {
+  function useToolOnTile(tool, targetTile, targetPosition, actionLabel, now = Date.now()) {
     if (!tool || !targetTile || !targetPosition) return false;
     const playerPosition = normalizePosition(bot.getPlayerPosition());
     if (!playerPosition) return false;
     if (!isAdjacentTile(playerPosition, targetPosition)) {
-      const adjacentPosition = lockedApproach || findAdjacentWalkablePosition(targetPosition, playerPosition);
+      const adjacentPosition = findAdjacentWalkablePosition(targetPosition, playerPosition);
       if (adjacentPosition) return goToPosition(adjacentPosition);
-      return false;
     }
     window.gameClient?.mouse?.__handleItemUseWith?.({ which: tool.which, index: tool.index }, { which: targetTile, index: 0xFF });
     state.lastStairsUseAt = now;
     state.lastPathAt = now;
     markPendingTransitionSource(targetPosition);
-    if (actionLabel === "cave roped transition tile") {
-      setRopePending(targetPosition, now);
-    }
     bot.log(actionLabel, { source: targetPosition, toolLocation: tool.location, toolSlot: tool.index, toolName: getThingName(tool.item) });
     return true;
   }
-  const ROPE_PENDING_TIMEOUT_MS = 2500;
-  const ROPE_RETRY_INTERVAL_MS = 1500;
-
-  function clearRopePending() {
-    state.ropePendingTarget = null;
-    state.ropePendingSince = 0;
-    state.ropeRetryCount = 0;
-  }
-
-  function clearRopeLock() {
-    state.ropeLockedTarget = null;
-    state.ropeLockedApproach = null;
-  }
-
-  function setRopePending(targetPosition, now) {
-    state.ropePendingTarget = normalizePosition(targetPosition);
-    state.ropePendingSince = now;
-  }
-
-  function getRopePendingTarget() {
-    return normalizePosition(state.ropePendingTarget);
-  }
-
-  function useRopeOnTile(targetTile, targetPosition, now = Date.now(), lockedApproach = null) {
-    return useToolOnTile(findRopeSource(), targetTile, targetPosition, "cave roped transition tile", now, lockedApproach);
-  }
+  function useRopeOnTile(targetTile, targetPosition, now = Date.now()) { return useToolOnTile(findRopeSource(), targetTile, targetPosition, "cave roped transition tile", now); }
   function useShovelOnTile(targetTile, targetPosition, now = Date.now()) { return useToolOnTile(findShovelSource(), targetTile, targetPosition, "cave shoveled transition tile", now); }
   function useFloorChangeTile(target, waypoint, now = Date.now()) {
     const position = normalizePosition(bot.getPlayerPosition());
@@ -1056,165 +1019,23 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function handleFloorChange(waypoint, now = Date.now()) {
     const position = normalizePosition(bot.getPlayerPosition());
     if (!position || !waypoint || position.z === waypoint.z) return false;
-
-    const pendingRopeTarget = getRopePendingTarget();
-    if (pendingRopeTarget && pendingRopeTarget.z === position.z && waypoint.z < position.z) {
-      const pendingAge = now - state.ropePendingSince;
-      if (pendingAge < ROPE_PENDING_TIMEOUT_MS) {
-        bot.logDebug("cave waiting for rope floor transition", {
-          source: pendingRopeTarget,
-          pendingForMs: pendingAge,
-          retry: state.ropeRetryCount,
-        });
-        return true;
-      }
-
-      const pendingTile = getTileAt(pendingRopeTarget);
-
-      // Never forget the selected rope hole merely because the transition
-      // timed out. Keep retrying the exact same coordinate while it remains
-      // a valid rope target.
-      if (pendingTile && isRopeTargetTile(pendingTile)) {
-        if (now - state.lastStairsUseAt >= ROPE_RETRY_INTERVAL_MS) {
-          state.ropeRetryCount += 1;
-          bot.log("cave retrying locked rope floor transition", {
-            source: pendingRopeTarget,
-            retry: state.ropeRetryCount,
-            pendingForMs: pendingAge,
-          });
-          useRopeOnTile(
-            pendingTile,
-            pendingRopeTarget,
-            now,
-            state.ropeLockedApproach
-          );
-        }
-        return true;
-      }
-
-      // Only release the lock when the exact tile is known and is no longer
-      // a rope target. A temporarily unloaded tile is not a failure.
-      if (pendingTile && !isRopeTargetTile(pendingTile)) {
-        bot.log("cave locked rope target is no longer a rope tile", {
-          source: pendingRopeTarget,
-          pendingForMs: pendingAge,
-        });
-        clearRopePending();
-        clearRopeLock();
-      } else {
-        return true;
-      }
-    }
-
-    // A selected rope hole owns this floor transition. Do not scan or switch
-    // to another rope hole until the selected hole is actually invalid.
-    if (waypoint.z < position.z && state.ropeLockedTarget) {
-      const lockedTarget = normalizePosition(state.ropeLockedTarget);
-      const lockedTile = lockedTarget ? getTileAt(lockedTarget) : null;
-
-      if (lockedTarget && lockedTarget.z === position.z && lockedTile && isRopeTargetTile(lockedTile)) {
-        if (!isAdjacentTile(position, lockedTarget)) {
-          let approach = normalizePosition(state.ropeLockedApproach);
-          const approachTile = approach ? getTileAt(approach) : null;
-
-          if (!approach || !approachTile?.isWalkable?.()) {
-            approach = findAdjacentWalkablePosition(lockedTarget, position);
-            state.ropeLockedApproach = approach;
-            if (approach) {
-              bot.logDebug("cave locked rope approach tile", {
-                rope: lockedTarget,
-                approach,
-              });
-            }
-          }
-
-          if (!approach) {
-            bot.log("cave locked rope has no walkable approach", {
-              source: lockedTarget,
-              targetZ: waypoint.z,
-            });
-            return true;
-          }
-
-          goToPosition(approach);
-          return true;
-        }
-
-        state.ropeLockedApproach = null;
-        const used = useRopeOnTile(lockedTile, lockedTarget, now);
-        if (used) {
-          bot.logDebug("cave using locked rope transition tile", {
-            tileX: lockedTarget.x,
-            tileY: lockedTarget.y,
-            tileZ: lockedTarget.z,
-            targetZ: waypoint.z,
-          });
-          return true;
-        }
-        return true;
-      }
-
-      // Only release the lock when the exact selected tile is known and
-      // explicitly no longer a rope target.
-      if (lockedTile && !isRopeTargetTile(lockedTile)) {
-        bot.log("cave locked rope target became invalid, reacquiring", {
-          source: lockedTarget,
-          targetZ: waypoint.z,
-        });
-        clearRopeLock();
-      } else {
-        // Keep the coordinate locked if the tile is temporarily unavailable.
-        return true;
-      }
-
-    }
-
-    // No rope target is locked yet. Select exactly one candidate.
     const visibleCandidate = findNearbyTransitionTile(position, waypoint);
     if (visibleCandidate) {
-      if (waypoint.z < position.z && isRopeTargetTile(visibleCandidate.tile)) {
-        state.ropeLockedTarget = normalizePosition(visibleCandidate.position);
-        state.ropeLockedApproach = null;
-        bot.log("cave selected and locked rope transition tile", {
-          tileX: visibleCandidate.position.x,
-          tileY: visibleCandidate.position.y,
-          tileZ: visibleCandidate.position.z,
-          targetZ: waypoint.z,
-        });
-
-        // From this point onward, operate exclusively on the selected rope hole.
-        return handleFloorChange(waypoint, now);
-      }
-
       const moved = useFloorChangeTile(visibleCandidate, waypoint, now);
       if (moved) {
-        bot.logDebug("cave using selected floor-change tile", {
-          tileX: visibleCandidate.position.x,
-          tileY: visibleCandidate.position.y,
-          tileZ: visibleCandidate.position.z,
-          targetZ: waypoint.z,
-        });
+        bot.log("cave probing visible floor-change tile", { tileX: visibleCandidate.position.x, tileY: visibleCandidate.position.y, tileZ: visibleCandidate.position.z, targetZ: waypoint.z });
         return true;
       }
     }
-
     const knownTransition = findBestKnownTransition(position, waypoint);
     if (knownTransition) {
       const target = { tile: getTileAt(knownTransition.from), position: knownTransition.from };
       const moved = useFloorChangeTile(target, waypoint, now);
       if (moved) {
-        bot.log("cave using learned floor transition", {
-          from: knownTransition.from,
-          to: knownTransition.to,
-          waypoint,
-        });
+        bot.log("cave using learned floor transition", { from: knownTransition.from, to: knownTransition.to, waypoint });
         return true;
       }
-      bot.log("cave learned transition unavailable, falling back to live scan", {
-        from: knownTransition.from,
-        to: knownTransition.to,
-        waypoint,
-      });
+      bot.log("cave learned transition unavailable, falling back to live scan", { from: knownTransition.from, to: knownTransition.to, waypoint });
     }
     return false;
   }
@@ -1347,8 +1168,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (route.length <= 1) state.direction = 1;
     state.lastPathAt = 0;
     state.lastPositionKey = getPositionKey(position);
-    clearRopePending();
-    clearRopeLock();
     state.lastProgressAt = Date.now();
     state.pausedForCombat = false;
     bot.log("cave bot started", { waypoints: route.length, currentIndex: state.currentIndex + 1, direction: state.direction, waypoint: getCurrentWaypoint() });
@@ -1361,8 +1180,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (state.timerId != null) { window.clearTimeout(state.timerId); state.timerId = null; }
     if (shouldPersistEnabled) { config.enabled = false; persistConfig(); }
     state.pausedForCombat = false;
-    clearRopePending();
-    clearRopeLock();
     bot.log("cave bot stopped");
     return true;
   }
