@@ -1167,6 +1167,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         return true;
       }
 
+    }
+
     // No rope target is locked yet. Select exactly one candidate.
     const visibleCandidate = findNearbyTransitionTile(position, waypoint);
     if (visibleCandidate) {
