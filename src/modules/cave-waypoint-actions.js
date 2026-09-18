@@ -247,7 +247,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
   function useToolOnNearestTarget({ action, tool, target, preferredPosition = null, missingToolLog, usedLog }) {
     const now = Date.now();
-    if (now - lastToolUseAt < 1200) return true;
+    if (now - lastToolUseAt < 250) return true;
 
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
     if (!playerPosition) return false;
