@@ -992,7 +992,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const targetPosition = normalizePosition(target?.position);
     const targetTile = target?.tile || (targetPosition ? getTileAt(targetPosition) : null);
     if (!position || !targetPosition || !targetTile) return false;
-    if (now - state.lastStairsUseAt < 1200) return true;
+    if (now - state.lastStairsUseAt < 250) return true;
     if (waypoint?.z < position.z && isRopeTargetTile(targetTile)) return useRopeOnTile(targetTile, targetPosition, now);
     if (!isFloorChangeTile(targetTile)) {
       if (waypoint?.z > position.z && isShovelTargetTile(targetTile)) return useShovelOnTile(targetTile, targetPosition, now);
