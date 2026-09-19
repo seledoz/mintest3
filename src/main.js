@@ -218,6 +218,7 @@
     currentBundle.installEquipRingModule(bot);
     currentBundle.installMiningModule?.(bot);
     currentBundle.installAutoEatModule(bot);
+    currentBundle.installPlayerManaPotionModule?.(bot);
     currentBundle.installTalkModule(bot);
     currentBundle.installMaxLightModule?.(bot);
     currentBundle.installPanel(bot);
@@ -277,6 +278,7 @@
       equipRing: bot.equipRing.status(),
       mining: bot.mining?.status?.() || null,
       eat: bot.eat.status(),
+      playerManaPotion: bot.playerManaPotion?.status?.() || null,
       talk: bot.talk.status(),
       runeMakerDrop: bot.runeMakerDrop?.status?.() || null,
       maxLight: bot.maxLight?.status?.() || null,
