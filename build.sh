@@ -43,6 +43,7 @@ cat \
   src/modules/auto-eat.js \
   src/modules/talk.js \
   src/modules/quick-controls-settings.js \
+  src/modules/player-mana-potion.js \
   src/ui/panel.js \
   src/modules/auto-target-v2-panel.js \
   src/main.js \
