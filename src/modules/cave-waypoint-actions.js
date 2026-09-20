@@ -660,7 +660,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
   function installPanelControls() {
     const recordButton = document.getElementById("minibia-bot-cave-add");
-    if (!recordButton) return;
+    if (!recordButton) return false;
 
     let select = document.getElementById("minibia-bot-cave-waypoint-action");
     if (!select) {
@@ -675,42 +675,36 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       select = document.createElement("select");
       select.id = "minibia-bot-cave-waypoint-action";
 
-      const walkOption = document.createElement("option");
-      walkOption.value = noopAction;
-      walkOption.textContent = "Walk";
+      [
+        [noopAction, "Walk"],
+        [ropeAction, "Use Rope"],
+        [ropeSpellAction, "Rope Spell (Exani Tera)"],
+        [hasteAction, "Haste Waypoint"],
+        [shovelAction, "Use Shovel"],
+        [waitAction, "Waypoint Wait (1 Minute)"],
+      ].forEach(([value, text]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = text;
+        select.appendChild(option);
+      });
 
-      const ropeOption = document.createElement("option");
-      ropeOption.value = ropeAction;
-      ropeOption.textContent = "Use Rope";
-
-      const ropeSpellOption = document.createElement("option");
-      ropeSpellOption.value = ropeSpellAction;
-      ropeSpellOption.textContent = "Rope Spell (Exani Tera)";
-
-      const hasteOption = document.createElement("option");
-      hasteOption.value = hasteAction;
-      hasteOption.textContent = "Haste Waypoint";
-
-      const shovelOption = document.createElement("option");
-      shovelOption.value = shovelAction;
-      shovelOption.textContent = "Use Shovel";
-
-      const waitOption = document.createElement("option");
-      waitOption.value = waitAction;
-      waitOption.textContent = "Waypoint Wait (1 Minute)";
-
-      select.appendChild(walkOption);
-      select.appendChild(ropeOption);
-      select.appendChild(ropeSpellOption);
-      select.appendChild(hasteOption);
-      select.appendChild(shovelOption);
-      select.appendChild(waitOption);
       wrapper.appendChild(label);
       wrapper.appendChild(select);
+      const row = recordButton.closest(".mb-row");
+      if (row) row.insertAdjacentElement("afterend", wrapper);
+      else recordButton.insertAdjacentElement("afterend", wrapper);
+    } else if (!select.querySelector('option[value="ropeSpell"]')) {
+      const option = document.createElement("option");
+      option.value = ropeSpellAction;
+      option.textContent = "Rope Spell (Exani Tera)";
+      select.appendChild(option);
+    }
 
-      recordButton.closest(".mb-row")?.insertAdjacentElement("afterend", wrapper);
-
-      const hasteSpellLabel = document.createElement("label");
+    let hasteSpellLabel = document.getElementById("minibia-bot-cave-haste-spell")?.closest(".mb-field");
+    let hasteSpellInput = document.getElementById("minibia-bot-cave-haste-spell");
+    if (!hasteSpellInput) {
+      hasteSpellLabel = document.createElement("label");
       hasteSpellLabel.className = "mb-field";
       hasteSpellLabel.setAttribute("for", "minibia-bot-cave-haste-spell");
 
@@ -718,44 +712,52 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       hasteSpellText.className = "mb-field-label";
       hasteSpellText.textContent = "Haste Spell";
 
-      const hasteSpellInput = document.createElement("input");
+      hasteSpellInput = document.createElement("input");
       hasteSpellInput.type = "text";
       hasteSpellInput.id = "minibia-bot-cave-haste-spell";
       hasteSpellInput.placeholder = "Enter spell, e.g. utani hur";
       hasteSpellInput.autocomplete = "off";
       hasteSpellLabel.appendChild(hasteSpellText);
       hasteSpellLabel.appendChild(hasteSpellInput);
-      wrapper.insertAdjacentElement("afterend", hasteSpellLabel);
+      select.closest(".mb-field")?.insertAdjacentElement("afterend", hasteSpellLabel);
+    }
 
-      const syncHasteSpellVisibility = () => {
-        const isHaste = select.value === hasteAction;
-        hasteSpellLabel.style.display = isHaste ? "" : "none";
-        if (isHaste) {
-          const actions = getWaypointActions();
-          const index = Math.max(0, (bot.cave?.getRoute?.().length || 1) - 1);
-          hasteSpellInput.value = getWaypointHasteSpells()[index] || "";
-        }
-      };
+    const syncHasteSpellVisibility = () => {
+      const isHaste = select.value === hasteAction;
+      if (hasteSpellLabel) hasteSpellLabel.style.display = isHaste ? "" : "none";
+      if (isHaste && hasteSpellInput) {
+        const index = Math.max(0, (bot.cave?.getRoute?.().length || 1) - 1);
+        hasteSpellInput.value = getWaypointHasteSpells()[index] || "";
+      }
+    };
 
+    if (!select.__caveWaypointActionsChangeBound) {
       select.addEventListener("change", syncHasteSpellVisibility);
+      select.__caveWaypointActionsChangeBound = true;
+    }
 
+    if (!recordButton.__caveWaypointActionsClickBound) {
       recordButton.addEventListener("click", () => {
         window.setTimeout(() => {
           const action = select.value;
           setLastWaypointAction(action);
-          if (action === hasteAction) setLastWaypointHasteSpell(hasteSpellInput.value);
+          if (action === hasteAction && hasteSpellInput) setLastWaypointHasteSpell(hasteSpellInput.value);
           syncHasteSpellVisibility();
         }, 0);
       });
+      recordButton.__caveWaypointActionsClickBound = true;
+    }
 
+    if (hasteSpellInput && !hasteSpellInput.__caveWaypointActionsChangeBound) {
       hasteSpellInput.addEventListener("change", () => {
         if (select.value === hasteAction) setLastWaypointHasteSpell(hasteSpellInput.value);
       });
-
-      syncHasteSpellVisibility();
+      hasteSpellInput.__caveWaypointActionsChangeBound = true;
     }
 
-    // Keep the waypoint-action controls recoverable even if the panel is rebuilt after module startup.\n    const existingActionSelect = document.getElementById("minibia-bot-cave-waypoint-action");\n    if (existingActionSelect && !existingActionSelect.querySelector('option[value="ropeSpell"]')) {\n      const option = document.createElement("option");\n      option.value = ropeSpellAction;\n      option.textContent = "Rope Spell (Exani Tera)";\n      existingActionSelect.appendChild(option);\n    }\n\n    if (!document.getElementById("minibia-bot-cave-record-wait")) {
+    syncHasteSpellVisibility();
+
+    if (!document.getElementById("minibia-bot-cave-record-wait")) {
       const waitButton = document.createElement("button");
       waitButton.type = "button";
       waitButton.id = "minibia-bot-cave-record-wait";
@@ -768,6 +770,23 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       });
       recordButton.insertAdjacentElement("afterend", waitButton);
     }
+
+    return true;
+  }
+
+  function watchPanelForWaypointActionControls() {
+    if (installPanelControls()) return;
+    if (bot.__caveWaypointActionsPanelObserver) return;
+
+    const observer = new MutationObserver(() => {
+      if (installPanelControls()) {
+        observer.disconnect();
+        bot.__caveWaypointActionsPanelObserver = null;
+      }
+    });
+    bot.__caveWaypointActionsPanelObserver = observer;
+    observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
+    bot.addCleanup(() => observer.disconnect());
   }
 
   function patchUiInject() {
