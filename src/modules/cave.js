@@ -1020,6 +1020,30 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       }
     }
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
+    const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
+    const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
+    const fromPos = normalizePosition(from);
+    const waypointPos = normalizePosition(waypoint);
+
+    // Rope Spell waypoints must physically reach the exact hole tile. The
+    // native pathfinder can reject a hole as a movement destination even
+    // when the tile reports walkable. When the player is one step away,
+    // use the existing D-pad movement primitive for that single step.
+    if (
+      waypointAction === "ropeSpell" &&
+      fromPos &&
+      waypointPos &&
+      fromPos.z === waypointPos.z &&
+      Math.abs(fromPos.x - waypointPos.x) + Math.abs(fromPos.y - waypointPos.y) === 1
+    ) {
+      const stepped = bot.caveArrowKeys?.stepToPosition?.(waypointPos);
+      if (stepped) {
+        state.lastPathAt = now;
+        bot.log("cave Rope Spell stepped onto exact waypoint tile", { ...waypoint, index: currentIndex + 1 });
+        return true;
+      }
+    }
+
     try { window.gameClient?.world?.pathfinder?.findPath?.(from, to); state.lastPathAt = now; bot.log("cave pathing to waypoint", { ...waypoint, index: state.currentIndex + 1, total: route.length }); return true; }
     catch (error) { bot.log("cave pathing failed", { ...waypoint, error: error?.message || error }); return false; }
   }
