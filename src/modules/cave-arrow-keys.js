@@ -245,41 +245,20 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     return state.dpadButtons;
   }
 
-  function sendNormalMovementKey(key) {
-    const eventInit = { key, code: key, bubbles: true, cancelable: true };
-    try {
-      const target = document.activeElement || document;
-      target.dispatchEvent(new KeyboardEvent("keydown", eventInit));
-      target.dispatchEvent(new KeyboardEvent("keyup", eventInit));
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function clickDpadDirection(key, from, next) {
+  function clickDpadDirection(key, from, next, fieldName) {
     const button = findDpadButtons()?.[key];
-    if (!button) {
-      state.lastError = `Minibia D-pad control not found for ${key}`;
-      return false;
-    }
+    if (!button) { state.lastError = `Minibia D-pad control not found for ${key}`; return false; }
     try {
-      // Use the same normal directional movement command for every tile.
-      // Fire fields only change the pathfinding passability; they do not get
-      // a separate movement command.
       button.click();
-      state.lastFieldName = null;
-      state.lastWalkMethod = `normal D-pad movement (${key})`;
+      state.lastFieldName = fieldName || null;
+      state.lastWalkMethod = fieldName ? `Minibia direct D-pad field step (${key})` : `Minibia direct D-pad step (${key})`;
       state.lastError = null;
-      state.pendingStep = { from: { ...from }, to: { ...next }, key, sentAt: Date.now() };
+      state.pendingStep = { from: { ...from }, to: { ...next }, key, fieldName: fieldName || null, sentAt: Date.now() };
       state.stepRetries = 0;
       state.lastKey = key;
       state.lastStepAt = Date.now();
       return true;
-    } catch (error) {
-      state.lastError = `D-pad movement failed: ${error?.message || error}`;
-      return false;
-    }
+    } catch (error) { state.lastError = `D-pad movement failed: ${error?.message || error}`; return false; }
   }
 
   function handlePendingStep(from, to) {
@@ -296,15 +275,10 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
       state.pendingStep = null; state.stepRetries = 0; return false;
     }
     state.stepRetries += 1;
-    if (sendNormalMovementKey(pending.key)) {
-      pending.sentAt = Date.now();
-      state.lastWalkMethod = `normal keyboard movement retry (${pending.key})`;
-      return true;
-    }
     const button = findDpadButtons()?.[pending.key];
-    if (!button) { state.lastError = `Normal movement control not found for retry ${pending.key}`; state.pendingStep = null; state.stepRetries = 0; return false; }
+    if (!button) { state.lastError = `Minibia D-pad control not found for retry ${pending.key}`; state.pendingStep = null; state.stepRetries = 0; return false; }
     try { button.click(); pending.sentAt = Date.now(); return true; }
-    catch (error) { state.lastError = `normal movement retry failed: ${error?.message || error}`; state.pendingStep = null; state.stepRetries = 0; return false; }
+    catch (error) { state.lastError = `D-pad retry failed: ${error?.message || error}`; state.pendingStep = null; state.stepRetries = 0; return false; }
   }
 
   function installPathfinderPatch() {
@@ -328,7 +302,7 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
       if (!path || path.length < 2) { state.lastError = "D-walk A* path not found"; return null; }
       const key = pickArrowKey(from, path[1]);
       if (!key) { state.lastError = "D-walk A* next step is not cardinal"; return null; }
-      return clickDpadDirection(key, from, path[1]);
+      return clickDpadDirection(key, from, path[1], getDamagingFieldName(getTileAt(path[1])));
     }
 
     patchedFindPath.__caveArrowKeysPatched = true;
