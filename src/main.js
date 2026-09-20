@@ -400,6 +400,34 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
     currentBundle.installCaveWaypointActionsModule?.(bot);
 
     bot.ui.inject();
+    const ensureCaveWaypointActionControls = () => {
+      const caveSection = document.getElementById("minibia-bot-cave-add")?.closest(".mb-section");
+      if (!caveSection) return false;
+      let select = document.getElementById("minibia-bot-cave-waypoint-action");
+      if (!select) {
+        const field = document.createElement("label"); field.className = "mb-field";
+        const label = document.createElement("span"); label.className = "mb-field-label"; label.textContent = "Waypoint Action";
+        select = document.createElement("select"); select.id = "minibia-bot-cave-waypoint-action";
+        [["walk","Walk"],["rope","Use Rope"],["ropeSpell","Rope Spell (Exani Tera)"],["haste","Haste Waypoint"],["shovel","Use Shovel"],["wait","Waypoint Wait (1 Minute)"]].forEach(([value,text]) => { const option=document.createElement("option"); option.value=value; option.textContent=text; select.appendChild(option); });
+        field.append(label, select);
+        const pathfinder = caveSection.querySelector("#minibia-bot-cave-pathfinder-mode")?.closest(".mb-field");
+        if (pathfinder) pathfinder.insertAdjacentElement("beforebegin", field); else caveSection.querySelector(".mb-stack")?.appendChild(field);
+      }
+      if (!document.getElementById("minibia-bot-cave-haste-spell")) {
+        const field=document.createElement("label"); field.className="mb-field"; field.id="minibia-bot-cave-haste-spell-field";
+        const label=document.createElement("span"); label.className="mb-field-label"; label.textContent="Haste Spell";
+        const input=document.createElement("input"); input.type="text"; input.id="minibia-bot-cave-haste-spell"; input.placeholder="Enter spell, e.g. utani hur"; input.autocomplete="off";
+        field.append(label,input); select.insertAdjacentElement("afterend",field);
+      }
+      const hasteField=document.getElementById("minibia-bot-cave-haste-spell-field");
+      if (hasteField) hasteField.style.display=select.value==="haste" ? "" : "none";
+      return true;
+    };
+    if (!ensureCaveWaypointActionControls()) {
+      const observer=new MutationObserver(()=>{ if (ensureCaveWaypointActionControls()) observer.disconnect(); });
+      observer.observe(document.documentElement,{childList:true,subtree:true});
+      window.setTimeout(()=>observer.disconnect(),10000);
+    }
     currentBundle.installQuickControlsSettingsModule?.(bot);
     currentBundle.installRuneV3KeyboardModule?.(bot);
     bot.gmDefaultChatKillSwitch?.injectPanelControl?.();
