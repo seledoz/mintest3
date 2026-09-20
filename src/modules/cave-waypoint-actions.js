@@ -814,11 +814,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       hotkeyText.className = "mb-field-label";
       hotkeyText.textContent = "Rope Spell Hotkey";
       ropeSpellHotkeyInput = document.createElement("input");
-      ropeSpellHotkeyInput.type = "text";
+      ropeSpellHotkeyInput.type = "number";
       ropeSpellHotkeyInput.id = "minibia-bot-cave-rope-spell-hotkey";
-      ropeSpellHotkeyInput.placeholder = "Press F1-F12";
+      ropeSpellHotkeyInput.min = "1"; ropeSpellHotkeyInput.max = "12"; ropeSpellHotkeyInput.step = "1"; ropeSpellHotkeyInput.placeholder = "Enter 1-12";
       ropeSpellHotkeyInput.autocomplete = "off";
-      ropeSpellHotkeyInput.readOnly = true;
+      ropeSpellHotkeyInput.readOnly = false;
       ropeSpellHotkeyLabel.appendChild(hotkeyText);
       ropeSpellHotkeyLabel.appendChild(ropeSpellHotkeyInput);
       select.closest(".mb-field")?.insertAdjacentElement("afterend", ropeSpellHotkeyLabel);
@@ -855,7 +855,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     if (!hasteHotkeyInput) {
       hasteHotkeyLabel = document.createElement("label"); hasteHotkeyLabel.className = "mb-field";
       const hotkeyText = document.createElement("span"); hotkeyText.className = "mb-field-label"; hotkeyText.textContent = "Haste Hotkey";
-      hasteHotkeyInput = document.createElement("input"); hasteHotkeyInput.type = "text"; hasteHotkeyInput.id = "minibia-bot-cave-haste-hotkey"; hasteHotkeyInput.placeholder = "Press F1-F12"; hasteHotkeyInput.readOnly = true;
+      hasteHotkeyInput = document.createElement("input"); hasteHotkeyInput.type = "number"; hasteHotkeyInput.min = "1"; hasteHotkeyInput.max = "12"; hasteHotkeyInput.step = "1"; hasteHotkeyInput.id = "minibia-bot-cave-haste-hotkey"; hasteHotkeyInput.placeholder = "Enter 1-12";
       hasteHotkeyLabel.appendChild(hotkeyText); hasteHotkeyLabel.appendChild(hasteHotkeyInput); select.closest(".mb-field")?.insertAdjacentElement("afterend", hasteHotkeyLabel);
     }
     const syncHasteHotkeyVisibility = () => {
