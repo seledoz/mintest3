@@ -5,8 +5,13 @@ window.__minibiaBotBundle.installCaveArrowFieldDetectionFix = function installCa
 
   const state = { timerId: null, marked: 0, lastScanAt: 0 };
   const FIELD_IDS = new Map([
-    [1487, "fire field"], [1488, "fire field"], [1492, "fire field"], [1493, "fire field"],
-    [1494, "fire field"], [1500, "fire field"], [1501, "fire field"],
+    // Fire-field IDs supported by Walk Over Fields across all pathing modes.
+    [1487, "fire field"], [1488, "fire field"], [1489, "fire field"],
+    [1492, "fire field"], [1493, "fire field"], [1494, "fire field"],
+    [1500, "fire field"], [1501, "fire field"], [1502, "fire field"],
+    [2118, "fire field"], [2119, "fire field"], [2120, "fire field"],
+    [2123, "fire field"], [2124, "fire field"], [2125, "fire field"],
+    [2131, "fire field"], [2132, "fire field"], [2133, "fire field"],
     [1490, "poison field"], [1496, "poison field"],
     [1491, "energy field"], [1495, "energy field"],
   ]);
