@@ -794,14 +794,18 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const originalInject = bot.ui.inject.bind(bot.ui);
     bot.ui.inject = (...args) => {
       const result = originalInject(...args);
-      installPanelControls();
+      watchPanelForWaypointActionControls();
       return result;
     };
     bot.ui.__caveWaypointActionsPatched = true;
   }
 
   patchUiInject();
-  window.setTimeout(patchUiInject, 0);
+  watchPanelForWaypointActionControls();
+  window.setTimeout(() => {
+    patchUiInject();
+    watchPanelForWaypointActionControls();
+  }, 0);
 
   bot.cave.getWaypointActions = getWaypointActions;
   bot.cave.setWaypointAction = setWaypointAction;
