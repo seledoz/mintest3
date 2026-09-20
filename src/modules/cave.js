@@ -1289,12 +1289,18 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       }
       let waypoint = getCurrentWaypoint();
       if (!waypoint) { stop(); return; }
-      if (isAtWaypoint(position, waypoint)) {
+      const blockingWaypointAction = !!bot.cave?.isWaypointActionBlocking?.(state.currentIndex);
+      const exactWaypoint = !!position && position.x === waypoint.x && position.y === waypoint.y && position.z === waypoint.z;
+      if (!blockingWaypointAction && isAtWaypoint(position, waypoint)) {
         const dist = getDistanceToWaypoint(position, waypoint);
         bot.logDebug("cave reached waypoint", { index: state.currentIndex + 1, waypoint, distance: Number.isFinite(dist) ? dist : null });
         waypoint = advanceWaypoint();
       }
       if (!waypoint) { bot.logDebug("cave no waypoint after advance, stopping"); return; }
+      if (blockingWaypointAction && exactWaypoint) {
+        bot.logDebug("cave holding exact Rope Spell waypoint", { index: state.currentIndex + 1, waypoint });
+        return;
+      }
       if (position && waypoint.z !== position.z) {
         bot.logDebug("cave floor change needed", { fromZ: position.z, toZ: waypoint.z, waypointIndex: state.currentIndex + 1, waypoint });
         handleFloorChange(waypoint, now);
