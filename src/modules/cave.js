@@ -928,35 +928,66 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function patchRopeSpellWaypointWalkability(waypoint) {
     if (!waypoint || bot.cave?.getWaypointActions == null) return false;
     const index = Math.trunc(Number(state.currentIndex) || 0);
-    const action = bot.cave?.getWaypointActions?.()[index];
-    if (action !== "ropeSpell") return false;
-    const tile = getTileAt(waypoint);
-    const prototype = tile && Object.getPrototypeOf(tile);
-    if (!prototype || typeof prototype.isWalkable !== "function") return false;
-    if (prototype.__caveBotRopeSpellWalkabilityApplied) return true;
-    const original = prototype.isWalkable;
-    const wrapper = function caveBotRopeSpellWalkability(...args) {
-      const activeRoute = bot.cave?.getRoute?.() || [];
-      const activeWaypoint = activeRoute[Math.trunc(Number(state.currentIndex) || 0)];
-      const position = getTilePosition(this);
-      if (
+    if (bot.cave?.getWaypointActions?.()[index] !== "ropeSpell") return false;
+
+    const activeRoute = bot.cave?.getRoute?.() || [];
+    const activeWaypoint = activeRoute[index];
+    if (!activeWaypoint) return false;
+
+    const tile = getTileAt(activeWaypoint);
+    if (!tile) return false;
+
+    const isActiveRopeWaypointTile = (candidate) => {
+      const position = getTilePosition(candidate);
+      return !!(
         bot.cave?.status?.()?.running &&
         bot.cave?.getWaypointActions?.()[Math.trunc(Number(state.currentIndex) || 0)] === "ropeSpell" &&
         position &&
-        activeWaypoint &&
         position.x === activeWaypoint.x &&
         position.y === activeWaypoint.y &&
         position.z === activeWaypoint.z
-      ) return true;
-      return original.apply(this, args);
+      );
     };
-    wrapper.__caveBotRopeSpellWalkabilityApplied = true;
-    wrapper.__caveBotRopeSpellWalkabilityOriginal = original;
-    prototype.isWalkable = wrapper;
-    prototype.__caveBotRopeSpellWalkabilityApplied = true;
-    return true;
-  }
 
+    let patched = false;
+    const patchObject = (target, marker) => {
+      if (!target || typeof target.isWalkable !== "function") return;
+      if (target[marker]) {
+        patched = true;
+        return;
+      }
+      const original = target.isWalkable;
+      const wrapper = function caveBotRopeSpellWalkability(...args) {
+        if (isActiveRopeWaypointTile(this)) return true;
+        return original.apply(this, args);
+      };
+      wrapper.__caveBotRopeSpellWalkabilityApplied = true;
+      wrapper.__caveBotRopeSpellWalkabilityOriginal = original;
+      target.isWalkable = wrapper;
+      target[marker] = true;
+      patched = true;
+    };
+
+    // Patch the actual hole tile first. This is important because the game
+    // pathfinder can hold a tile instance/class different from the player's
+    // current tile prototype.
+    patchObject(tile, "__caveBotRopeSpellTileWalkabilityApplied");
+
+    // Also patch the tile's prototype and inherited prototype chain so both
+    // the game pathfinder and the A* matrix see the exact rope waypoint as
+    // walkable.
+    let prototype = Object.getPrototypeOf(tile);
+    while (prototype) {
+      patchObject(prototype, "__caveBotRopeSpellRopeWalkabilityApplied");
+      prototype = Object.getPrototypeOf(prototype);
+    }
+
+    if (patched) {
+      matrixCache.clear();
+      pathCache.clear();
+    }
+    return patched;
+  }
   function goToWaypoint(waypoint) {
     patchFieldWalkabilityForCavePathing();
     patchRopeSpellWaypointWalkability(waypoint);
