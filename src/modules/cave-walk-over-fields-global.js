@@ -55,6 +55,58 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     return false;
   }
 
+  const definitionPatches = new Map();
+
+  function patchFieldDefinitions(bot) {
+    const status = bot.cave?.status?.();
+    const enabled = !!status?.config?.walkOverFields;
+    const client = window.gameClient;
+    if (!client) return;
+
+    const containers = [
+      client.itemDefinitionsByCid,
+      client.itemDefinitionsBySid,
+      client.itemDefinitions,
+    ].filter(Boolean);
+
+    for (const container of containers) {
+      for (const id of FIRE_FIELD_IDS) {
+        const definition = container[id];
+        if (!definition || definitionPatches.has(definition)) continue;
+        const props = definition.properties && typeof definition.properties === "object"
+          ? definition.properties
+          : definition;
+        const keys = [
+          "walkable", "walkableTile", "passable", "pathable",
+          "blocking", "blocksMovement", "blocksWalk", "blockMovement",
+          "block", "blocks", "unwalkable", "impassable",
+        ];
+        const original = {};
+        let changed = false;
+        for (const key of keys) {
+          if (!Object.prototype.hasOwnProperty.call(props, key)) continue;
+          original[key] = props[key];
+          if (key === "blocking" || key === "blocksMovement" || key === "blocksWalk" ||
+              key === "blockMovement" || key === "block" || key === "blocks" ||
+              key === "unwalkable" || key === "impassable") {
+            props[key] = false;
+          } else {
+            props[key] = true;
+          }
+          changed = true;
+        }
+        if (changed) definitionPatches.set(definition, { props, original });
+      }
+    }
+
+    if (!enabled) {
+      for (const [definition, patch] of definitionPatches) {
+        for (const [key, value] of Object.entries(patch.original)) patch.props[key] = value;
+        definitionPatches.delete(definition);
+      }
+    }
+  }
+
   function getLoadedTiles() {
     const chunks = window.gameClient?.world?.chunks || [];
     const tiles = [];
