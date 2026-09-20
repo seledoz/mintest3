@@ -404,7 +404,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     pathCache.set(key, { path, at: Date.now() });
   }
 
-  function findPathAStar(from, to) {
+  function findPathAStar(from, to, waypointTolerance = null) {
     patchFieldWalkabilityForCavePathing();
     from = normalizePosition(from);
     to = normalizePosition(to);
@@ -416,7 +416,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (cached) return cached;
 
     const matrix = getAStarWalkabilityMatrix(from, from.z);
-    const tolerance = Math.max(1, Number(config.waypointTolerance) || 0);
+    const tolerance = waypointTolerance == null ? Math.max(1, Number(config.waypointTolerance) || 0) : Math.max(0, Math.trunc(Number(waypointTolerance) || 0));
     const path = aStarPath(from, to,
       (x, y) => matrix.get(`${x},${y}`) === true,
       (node) => getAStarNeighbors(node, matrix),
@@ -933,7 +933,10 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (config.pathfinderMode === 'astar') {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
-      const path = findPathAStar(fromPos, waypointPos);
+      const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
+      const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
+      const requiresExactWaypoint = waypointAction === "ropeSpell";
+      const path = findPathAStar(fromPos, waypointPos, requiresExactWaypoint ? 0 : null);
       if (path && path.length > 0) {
         const playerPos = fromPos;
         const waypointOnScreen = waypointPos && isOnScreen(waypointPos, playerPos);
