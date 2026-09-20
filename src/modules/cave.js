@@ -960,6 +960,47 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     patchFieldWalkabilityForCavePathing();
     if (stepOntoFireFieldWaypoint(waypoint)) return true;
     const from = bot.getPlayerPosition();
+    // The game's native pathfinder can still reject a fire-field destination
+    // even after isWalkable() is patched. Handle fire-field waypoints as a
+    // two-stage move: path to a normal cardinally-adjacent tile, then take the
+    // final direct D-pad step onto the field. This specifically fixes the case
+    // where the player is two or more squares away and the native pathfinder
+    // reports "no way" before ever reaching the field.
+    if (config.walkOverFields && from && waypoint) {
+      const fromPos = normalizePosition(from);
+      const waypointPos = normalizePosition(waypoint);
+      const waypointTile = getTileAt(waypointPos);
+      if (fromPos && waypointPos && isFireFieldTileForCavePathing(waypointTile) && fromPos.z === waypointPos.z) {
+        const distance = Math.abs(fromPos.x - waypointPos.x) + Math.abs(fromPos.y - waypointPos.y);
+        if (distance > 1) {
+          const adjacentCandidates = [
+            { x: waypointPos.x, y: waypointPos.y - 1, z: waypointPos.z },
+            { x: waypointPos.x + 1, y: waypointPos.y, z: waypointPos.z },
+            { x: waypointPos.x, y: waypointPos.y + 1, z: waypointPos.z },
+            { x: waypointPos.x - 1, y: waypointPos.y, z: waypointPos.z },
+          ];
+          adjacentCandidates.sort((a, b) => {
+            const da = Math.abs(a.x - fromPos.x) + Math.abs(a.y - fromPos.y);
+            const db = Math.abs(b.x - fromPos.x) + Math.abs(b.y - fromPos.y);
+            return da - db;
+          });
+          const adjacent = adjacentCandidates.find((candidate) => {
+            const tile = getTileAt(candidate);
+            return tile && !isFireFieldTileForCavePathing(tile) && tile.isWalkable?.();
+          });
+          if (adjacent) {
+            try {
+              window.gameClient?.world?.pathfinder?.findPath?.(from, new Position(adjacent.x, adjacent.y, adjacent.z));
+              state.lastPathAt = Date.now();
+              bot.log("cave pathing to fire-field approach tile", { waypoint: waypointPos, targetTile: adjacent });
+              return true;
+            } catch (error) {
+              bot.log("cave fire-field approach pathing failed", { waypoint: waypointPos, targetTile: adjacent, error: error?.message || error });
+            }
+          }
+        }
+      }
+    }
     if (!from || !waypoint) return false;
     const now = Date.now();
     if (config.pathfinderMode === 'astar') {
