@@ -181,6 +181,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     return routeLength ? setWaypointRopeSpellHotkey(routeLength - 1, hotkey) : null;
   }
 
+
   function readAllHasteSpells() {
     const raw = bot.storage.get(hasteSpellStorageKey, {});
     return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
@@ -853,6 +854,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       select.appendChild(option);
     }
 
+    let ropeSpellPendingHotkey = "";
     let ropeSpellHotkeyLabel = document.getElementById("minibia-bot-cave-rope-spell-hotkey")?.closest(".mb-field");
     let ropeSpellHotkeyInput = document.getElementById("minibia-bot-cave-rope-spell-hotkey");
     if (!ropeSpellHotkeyInput) {
@@ -890,9 +892,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
         event.preventDefault();
         event.stopPropagation();
         ropeSpellHotkeyInput.value = key;
-        if (select.value === ropeSpellAction) setLastWaypointRopeSpellHotkey(key);
+        if (select.value === ropeSpellAction) { ropeSpellPendingHotkey = key; setLastWaypointRopeSpellHotkey(key); }
       });
-      ropeSpellHotkeyInput.addEventListener("input", () => { const value = Math.trunc(Number(ropeSpellHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === ropeSpellAction) setLastWaypointRopeSpellHotkey(`F${value}`); });
+      ropeSpellHotkeyInput.addEventListener("input", () => { const value = Math.trunc(Number(ropeSpellHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === ropeSpellAction) { ropeSpellPendingHotkey = `F${value}`; setLastWaypointRopeSpellHotkey(ropeSpellPendingHotkey); } });
       ropeSpellHotkeyInput.__caveWaypointActionsKeyBound = true;
     }
 
@@ -920,6 +922,15 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       hasteHotkeyInput.addEventListener("input", () => { const value = Math.trunc(Number(hasteHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === hasteAction) setLastWaypointHasteHotkey(`F${value}`); });
       hasteHotkeyInput.__caveWaypointActionsKeyBound = true;
     }
+    if (!select.__caveWaypointActionsRopeSpellAddBound) {
+      recordButton.addEventListener("click", () => window.setTimeout(() => {
+        if (select.value !== ropeSpellAction || !ropeSpellPendingHotkey) return;
+        setLastWaypointRopeSpellHotkey(ropeSpellPendingHotkey);
+        syncRopeSpellHotkeyVisibility();
+      }, 0));
+      select.__caveWaypointActionsRopeSpellAddBound = true;
+    }
+
     if (!select.__caveWaypointActionsHasteChangeBound) { select.addEventListener("change", syncHasteHotkeyVisibility); select.__caveWaypointActionsHasteChangeBound = true; }
     if (!recordButton.__caveWaypointActionsHasteClickBound) { recordButton.addEventListener("click", () => window.setTimeout(() => { if (select.value === hasteAction && hasteHotkeyInput) setLastWaypointHasteHotkey(hasteHotkeyInput.value); syncHasteHotkeyVisibility(); }, 0)); recordButton.__caveWaypointActionsHasteClickBound = true; }
     syncRopeSpellHotkeyVisibility(); syncHasteHotkeyVisibility();
