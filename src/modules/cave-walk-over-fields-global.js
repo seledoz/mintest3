@@ -91,19 +91,31 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       );
     } catch (_) {}
     const prototype = tile && Object.getPrototypeOf(tile);
-    if (!prototype || typeof prototype.isWalkable !== "function") return false;
-    if (prototype.isWalkable.__globalCaveFieldWalkable) return true;
+    if (!prototype) return false;
 
-    const original = prototype.isWalkable;
-    const wrapper = function globalCaveFieldPrototypeWalkable(...args) {
-      const status = bot.cave?.status?.();
-      if (status?.config?.walkOverFields && isFireFieldTile(this)) return true;
-      return original.apply(this, args);
-    };
-    wrapper.__globalCaveFieldWalkable = true;
-    wrapper.__globalCaveFieldOriginal = original;
-    prototype.isWalkable = wrapper;
-    return true;
+    // The game's native pathfinder may use a passability predicate other than
+    // isWalkable(). Patch the tile collision predicates themselves, but never
+    // replace the movement command. Fire fields are therefore just ordinary
+    // passable tiles to every native pathing implementation.
+    const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk"];
+    let patched = false;
+    for (const name of predicates) {
+      if (typeof prototype[name] !== "function" || prototype[name].__globalCaveFieldWalkable) continue;
+      const original = prototype[name];
+      const wrapper = function globalCaveFieldPassability(...args) {
+        const status = bot.cave?.status?.();
+        if (status?.config?.walkOverFields && isFireFieldTile(this)) {
+          if (name === "isBlocking" || name === "blocksMovement") return false;
+          return true;
+        }
+        return original.apply(this, args);
+      };
+      wrapper.__globalCaveFieldWalkable = true;
+      wrapper.__globalCaveFieldOriginal = original;
+      prototype[name] = wrapper;
+      patched = true;
+    }
+    return patched;
   }
 
   function patchAllLoadedTiles(bot) {
