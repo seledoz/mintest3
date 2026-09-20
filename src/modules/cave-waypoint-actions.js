@@ -34,6 +34,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   };
   const hasteState = {
     lastCastKey: null,
+    armed: true,
   };
   const waitState = {
     active: false,
@@ -495,26 +496,41 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     ropeSpellState.lastRetryAt = now;
     stopCurrentMovement();
     bot.log("cave rope spell hotkey triggered", { index: index + 1, hotkey, position: playerPosition });
-    return true;
-  }
-
-  function runHasteWaypoint(index, waypoint, playerPosition) {
+    r  function runHasteWaypoint(index, waypoint, playerPosition) {
     if (!playerPosition || !waypoint) return false;
-    if (!isAtWaypoint(playerPosition, waypoint)) return false;
+
+    // One cast per physical arrival. The waypoint re-arms only after the
+    // player leaves it, so looping back to the same waypoint casts again.
+    if (!isAtWaypoint(playerPosition, waypoint)) {
+      hasteState.armed = true;
+      hasteState.lastCastKey = null;
+      return false;
+    }
+
     const castKey = `${getActivePresetName()}:${index}`;
-    if (hasteState.lastCastKey === castKey) return true;
+    if (!hasteState.armed && hasteState.lastCastKey === castKey) return true;
+
     const hotkey = getWaypointHasteHotkeys()[index] || "";
     if (!hotkey) return false;
+
     const slot = Number(hotkey.slice(1));
     const sent = bot.clickHotbar?.(slot - 1);
     if (!sent) return false;
+
     hasteState.lastCastKey = castKey;
-    bot.log("cave haste waypoint hotkey triggered", { index: index + 1, hotkey, position: playerPosition });
+    hasteState.armed = false;
+    bot.log("cave haste waypoint hotkey triggered", {
+      index: index + 1,
+      hotkey,
+      position: playerPosition,
+    });
+
     const status = bot.cave?.status?.();
-    if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+    if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
+      bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+    }
     return true;
   }
-
   function useRopeOnNearestHole(preferredPosition = null) {
     return useToolOnNearestTarget({
       action: ropeAction,
