@@ -290,22 +290,27 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   }
 
   function runRopeSpellWaypoint(index, waypoint, playerPosition) {
-    if (!playerPosition || !waypoint || playerPosition.x !== waypoint.x || playerPosition.y !== waypoint.y || playerPosition.z !== waypoint.z) return false;
+    if (!playerPosition || !waypoint) return false;
 
     if (ropeSpellState.active && ropeSpellState.index === index) {
       if (playerPosition.z !== ropeSpellState.startZ) {
+        const fromZ = ropeSpellState.startZ;
+        const toZ = playerPosition.z;
         ropeSpellState.active = false;
         ropeSpellState.index = -1;
+        ropeSpellState.startZ = null;
         const status = bot.cave?.status?.();
         if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
           const nextIndex = getNextRouteIndex(status);
           bot.cave?.setCurrentIndex?.(nextIndex);
         }
-        bot.log("cave rope spell floor change detected", { index: index + 1, fromZ: ropeSpellState.startZ, toZ: playerPosition.z });
+        bot.log("cave rope spell floor change detected", { index: index + 1, fromZ, toZ });
         return true;
       }
       return true;
     }
+
+    if (playerPosition.x !== waypoint.x || playerPosition.y !== waypoint.y || playerPosition.z !== waypoint.z) return false;
 
     const sent = bot.sendChat?.(ropeSpellText);
     if (!sent) {
@@ -558,6 +563,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   bot.addCleanup(() => {
     window.clearInterval(actionTimerId);
     clearWaitTimer();
+    ropeSpellState.active = false;
+    ropeSpellState.index = -1;
+    ropeSpellState.startZ = null;
   });
 
   function installPanelControls() {
