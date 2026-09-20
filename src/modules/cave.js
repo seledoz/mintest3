@@ -925,8 +925,41 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return dx <= tolerance && dy <= tolerance;
   }
 
+  function patchRopeSpellWaypointWalkability(waypoint) {
+    if (!waypoint || bot.cave?.getWaypointActions == null) return false;
+    const index = Math.trunc(Number(state.currentIndex) || 0);
+    const action = bot.cave?.getWaypointActions?.()[index];
+    if (action !== "ropeSpell") return false;
+    const tile = getTileAt(waypoint);
+    const prototype = tile && Object.getPrototypeOf(tile);
+    if (!prototype || typeof prototype.isWalkable !== "function") return false;
+    if (prototype.__caveBotRopeSpellWalkabilityApplied) return true;
+    const original = prototype.isWalkable;
+    const wrapper = function caveBotRopeSpellWalkability(...args) {
+      const activeRoute = bot.cave?.getRoute?.() || [];
+      const activeWaypoint = activeRoute[Math.trunc(Number(state.currentIndex) || 0)];
+      const position = getTilePosition(this);
+      if (
+        bot.cave?.status?.()?.running &&
+        bot.cave?.getWaypointActions?.()[Math.trunc(Number(state.currentIndex) || 0)] === "ropeSpell" &&
+        position &&
+        activeWaypoint &&
+        position.x === activeWaypoint.x &&
+        position.y === activeWaypoint.y &&
+        position.z === activeWaypoint.z
+      ) return true;
+      return original.apply(this, args);
+    };
+    wrapper.__caveBotRopeSpellWalkabilityApplied = true;
+    wrapper.__caveBotRopeSpellWalkabilityOriginal = original;
+    prototype.isWalkable = wrapper;
+    prototype.__caveBotRopeSpellWalkabilityApplied = true;
+    return true;
+  }
+
   function goToWaypoint(waypoint) {
     patchFieldWalkabilityForCavePathing();
+    patchRopeSpellWaypointWalkability(waypoint);
     const from = bot.getPlayerPosition();
     if (!from || !waypoint) return false;
     const now = Date.now();
