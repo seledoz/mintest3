@@ -485,7 +485,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     ropeSpellState.armed = false;
     stopCurrentMovement();
     bot.log("cave rope spell hotkey triggered", { index: index + 1, hotkey, position: playerPosition });
-    r  function runHasteWaypoint(index, waypoint, playerPosition) {
+  }
+
+  function runHasteWaypoint(index, waypoint, playerPosition) {
     if (!playerPosition || !waypoint) return false;
 
     // One cast per physical arrival. The waypoint re-arms only after the
