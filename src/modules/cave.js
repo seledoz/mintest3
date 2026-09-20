@@ -17,6 +17,14 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     /\bgravel pile\b/i,
     /\bdirt pile\b/i,
   ];
+  // CaveBot field walking uses the same fire-field definition as the
+  // existing "Walk Over Fields" toggle. When enabled, pathfinding treats
+  // fire-field tiles as walkable instead of returning "no way".
+  const FIRE_FIELD_IDS = new Set([
+    1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495,
+    1496, 1500, 1501, 1502,
+  ]);
+  const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
   const state = {
     running: false,
     timerId: null,
@@ -49,11 +57,13 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       enabled: false,
       activePresetName: defaultPresetName,
       pathfinderMode: 'game',
+      walkOverFields: false,
     },
     bot.storage.get(configStorageKey, {})
   );
   config.tickMs = 200;
   config.waypointTolerance = Math.max(1, Math.trunc(Number(config.waypointTolerance) || 0));
+  config.walkOverFields = !!config.walkOverFields;
 
   function normalizePresetName(value) {
     const normalized = String(value || "").trim().replace(/\s+/g, " ");
@@ -298,6 +308,47 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return null;
   }
 
+  function isFireFieldTileForCavePathing(tile) {
+    if (!tile) return false;
+    for (const thing of getTileThings(tile)) {
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      if (FIRE_FIELD_IDS.has(id)) return true;
+      const definition = getThingDefinition(thing?.id);
+      const text = [
+        thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
+        thing?.type, thing?.thingType, thing?.category,
+        definition?.name, definition?.properties?.name,
+        definition?.properties?.field, definition?.properties?.type,
+        definition?.properties?.category,
+      ].filter(Boolean).map(String).join(" ");
+      if (FIRE_FIELD_PATTERN.test(text) || /\bfire\s*field\b/i.test(text)) return true;
+    }
+    return false;
+  }
+
+  function patchFieldWalkabilityForCavePathing() {
+    if (!config.walkOverFields) return false;
+    const position = normalizePosition(bot.getPlayerPosition());
+    if (!position) return false;
+    let tile = null;
+    try {
+      tile = getTileAt(position);
+    } catch (_) {}
+    const prototype = tile && Object.getPrototypeOf(tile);
+    if (!prototype || typeof prototype.isWalkable !== "function") return false;
+    if (prototype.__caveBotWalkOverFieldsApplied) return true;
+    const original = prototype.isWalkable;
+    const wrapper = function caveBotWalkOverFieldsIsWalkable(...args) {
+      if (config.walkOverFields && isFireFieldTileForCavePathing(this)) return true;
+      return original.apply(this, args);
+    };
+    wrapper.__caveBotWalkOverFieldsApplied = true;
+    wrapper.__caveBotWalkOverFieldsOriginal = original;
+    prototype.isWalkable = wrapper;
+    prototype.__caveBotWalkOverFieldsApplied = true;
+    return true;
+  }
+
   function getAStarWalkabilityMatrix(position, z) {
     const cacheKey = `matrix_${z}`;
     const cached = matrixCache.get(cacheKey);
@@ -313,7 +364,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         for (const tile of chunk.tiles) {
           if (!tile?.__position || tile.__position.z !== z) continue;
           const key = `${tile.__position.x},${tile.__position.y}`;
-          matrix.set(key, tile.isWalkable ? tile.isWalkable() : false);
+          const walkable = tile.isWalkable ? tile.isWalkable() : false;
+          matrix.set(key, config.walkOverFields && isFireFieldTileForCavePathing(tile) ? true : walkable);
         }
       }
     } catch (e) {
@@ -346,6 +398,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
 
   function findPathAStar(from, to) {
+    patchFieldWalkabilityForCavePathing();
     from = normalizePosition(from);
     to = normalizePosition(to);
     if (!from || !to) return null;
@@ -851,6 +904,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
 
   function goToWaypoint(waypoint) {
+    patchFieldWalkabilityForCavePathing();
     const from = bot.getPlayerPosition();
     if (!from || !waypoint) return false;
     const now = Date.now();
@@ -1385,6 +1439,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     Object.assign(config, nextConfig);
     config.tickMs = 200;
     config.waypointTolerance = Math.max(1, Math.trunc(Number(config.waypointTolerance) || 0));
+    config.walkOverFields = !!config.walkOverFields;
     persistConfig();
     bot.log("cave config updated", { ...config });
     return { ...config };
