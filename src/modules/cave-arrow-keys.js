@@ -355,7 +355,15 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     if (Math.abs(from.x - to.x) + Math.abs(from.y - to.y) !== 1) return false;
     const key = pickArrowKey(from, to);
     if (!key) return false;
-    return clickDpadDirection(key, from, to, null);
+
+    // Exact Rope Spell final steps must use a fresh D-pad lookup when the
+    // cached controls are stale or missing.
+    let stepped = clickDpadDirection(key, from, to, null);
+    if (!stepped) {
+      state.dpadButtons = null;
+      stepped = clickDpadDirection(key, from, to, null);
+    }
+    return stepped;
   }
 
   bot.caveArrowKeys = { status, destroy, ensureDropdownOption: () => {}, stepToPosition };
