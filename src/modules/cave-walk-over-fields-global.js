@@ -171,6 +171,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   }
 
   function patchAllLoadedTiles(bot) {
+    patchFieldDefinitions(bot);
     patchPrototype(bot);
     for (const tile of getLoadedTiles()) {
       if (isFireFieldTile(tile)) patchTile(tile, bot);
