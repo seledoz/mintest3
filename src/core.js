@@ -447,13 +447,31 @@ window.__minibiaBotBundle.createBot = function createBot() {
       return tryClickReconnect();
     },
     clickHotbar(index) {
-      const button = window.gameClient?.interface?.hotbarManager?.slots?.[index]?.canvas?.canvas;
-      if (!button) {
-        return false;
+      const slotIndex = Math.trunc(Number(index));
+      if (!Number.isFinite(slotIndex) || slotIndex < 0) return false;
+      const slot = window.gameClient?.interface?.hotbarManager?.slots?.[slotIndex];
+      const button = slot?.canvas?.canvas || slot?.canvas;
+      if (!slot && !button) return false;
+
+      for (const method of ["activate", "use", "click", "trigger"]) {
+        if (typeof slot?.[method] === "function") {
+          try { slot[method](); return true; } catch (_) {}
+        }
       }
 
-      button.click();
-      return true;
+      if (button && typeof button.dispatchEvent === "function") {
+        try {
+          const rect = button.getBoundingClientRect?.() || { left: 0, top: 0, width: 1, height: 1 };
+          const clientX = rect.left + Math.max(1, rect.width / 2);
+          const clientY = rect.top + Math.max(1, rect.height / 2);
+          ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((type) => {
+            const EventClass = type.startsWith("pointer") ? PointerEvent : MouseEvent;
+            button.dispatchEvent(new EventClass(type, { bubbles: true, cancelable: true, view: window, clientX, clientY, button: 0, buttons: type.endsWith("down") ? 1 : 0 }));
+          });
+          return true;
+        } catch (_) {}
+      }
+      return false;
     },
     getAlarmAudioSrc() {
       return getStoredAlarmAudioSrc();
