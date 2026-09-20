@@ -755,7 +755,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       syncHasteSpellVisibility();
     }
 
-    if (!document.getElementById("minibia-bot-cave-record-wait")) {
+    // Keep the waypoint-action controls recoverable even if the panel is rebuilt after module startup.\n    const existingActionSelect = document.getElementById("minibia-bot-cave-waypoint-action");\n    if (existingActionSelect && !existingActionSelect.querySelector('option[value="ropeSpell"]')) {\n      const option = document.createElement("option");\n      option.value = ropeSpellAction;\n      option.textContent = "Rope Spell (Exani Tera)";\n      existingActionSelect.appendChild(option);\n    }\n\n    if (!document.getElementById("minibia-bot-cave-record-wait")) {
       const waitButton = document.createElement("button");
       waitButton.type = "button";
       waitButton.id = "minibia-bot-cave-record-wait";
