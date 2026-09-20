@@ -935,22 +935,14 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     }
     const button = buttons[key];
     if (!button) return false;
-    try {
-      button.click();
-      state.lastPathAt = Date.now();
-      bot.logDebug("cave stepped onto fire field", { from, target, key });
-      return true;
-    } catch (_) {
-      return false;
-    }
+    try { button.click(); state.lastPathAt = Date.now(); return true; } catch (_) { return false; }
   }
 
   function stepOntoFireFieldWaypoint(waypoint) {
     if (!config.walkOverFields || !waypoint) return false;
     const from = normalizePosition(bot.getPlayerPosition());
     const target = normalizePosition(waypoint);
-    if (!from || !target || from.z !== target.z) return false;
-    if (!isAdjacentTile(from, target)) return false;
+    if (!from || !target || from.z !== target.z || !isAdjacentTile(from, target)) return false;
     const tile = getTileAt(target);
     if (!isFireFieldTileForCavePathing(tile)) return false;
     return clickDpadTowardAdjacentFireField(from, target);
@@ -958,51 +950,18 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
   function goToWaypoint(waypoint) {
     patchFieldWalkabilityForCavePathing();
-    if (stepOntoFireFieldWaypoint(waypoint)) return true;
     const from = bot.getPlayerPosition();
-    // The game's native pathfinder can still reject a fire-field destination
-    // even after isWalkable() is patched. Handle fire-field waypoints as a
-    // two-stage move: path to a normal cardinally-adjacent tile, then take the
-    // final direct D-pad step onto the field. This specifically fixes the case
-    // where the player is two or more squares away and the native pathfinder
-    // reports "no way" before ever reaching the field.
-    if (config.walkOverFields && from && waypoint) {
-      const fromPos = normalizePosition(from);
-      const waypointPos = normalizePosition(waypoint);
-      const waypointTile = getTileAt(waypointPos);
-      if (fromPos && waypointPos && isFireFieldTileForCavePathing(waypointTile) && fromPos.z === waypointPos.z) {
-        const distance = Math.abs(fromPos.x - waypointPos.x) + Math.abs(fromPos.y - waypointPos.y);
-        if (distance > 1) {
-          const adjacentCandidates = [
-            { x: waypointPos.x, y: waypointPos.y - 1, z: waypointPos.z },
-            { x: waypointPos.x + 1, y: waypointPos.y, z: waypointPos.z },
-            { x: waypointPos.x, y: waypointPos.y + 1, z: waypointPos.z },
-            { x: waypointPos.x - 1, y: waypointPos.y, z: waypointPos.z },
-          ];
-          adjacentCandidates.sort((a, b) => {
-            const da = Math.abs(a.x - fromPos.x) + Math.abs(a.y - fromPos.y);
-            const db = Math.abs(b.x - fromPos.x) + Math.abs(b.y - fromPos.y);
-            return da - db;
-          });
-          const adjacent = adjacentCandidates.find((candidate) => {
-            const tile = getTileAt(candidate);
-            return tile && !isFireFieldTileForCavePathing(tile) && tile.isWalkable?.();
-          });
-          if (adjacent) {
-            try {
-              window.gameClient?.world?.pathfinder?.findPath?.(from, new Position(adjacent.x, adjacent.y, adjacent.z));
-              state.lastPathAt = Date.now();
-              bot.log("cave pathing to fire-field approach tile", { waypoint: waypointPos, targetTile: adjacent });
-              return true;
-            } catch (error) {
-              bot.log("cave fire-field approach pathing failed", { waypoint: waypointPos, targetTile: adjacent, error: error?.message || error });
-            }
-          }
-        }
-      }
-    }
     if (!from || !waypoint) return false;
     const now = Date.now();
+    if (config.walkOverFields && isFireFieldTileForCavePathing(getTileAt(waypoint))) {
+      const fromPos = normalizePosition(from);
+      const waypointPos = normalizePosition(waypoint);
+      if (fromPos && waypointPos && fromPos.z === waypointPos.z) {
+        const dx = waypointPos.x - fromPos.x;
+        const dy = waypointPos.y - fromPos.y;
+        if (Math.abs(dx) + Math.abs(dy) === 1 && stepOntoFireFieldWaypoint(waypointPos)) return true;
+      }
+    }
     if (config.pathfinderMode === 'astar') {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
@@ -1020,27 +979,14 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         }
         if (targetTile && !(targetTile.x === playerPos.x && targetTile.y === playerPos.y)) {
           const to = new Position(targetTile.x, targetTile.y, playerPos.z);
-          try {
-            window.gameClient?.world?.pathfinder?.findPath?.(from, to);
-            state.lastPathAt = now;
-            bot.log("cave A* pathing to waypoint", { ...waypoint, index: state.currentIndex + 1, total: route.length, targetTile, pathLength: path.length, waypointOnScreen });
-            return true;
-          } catch (error) {
-            bot.log("cave A* pathing failed to target tile, falling back", { targetTile, error: error?.message || error });
-          }
+          try { window.gameClient?.world?.pathfinder?.findPath?.(from, to); state.lastPathAt = now; return true; }
+          catch (error) { bot.log("cave A* pathing failed to target tile, falling back", { targetTile, error: error?.message || error }); }
         }
-      } else bot.log("cave A* pathfinding failed, falling back to game pathfinder", { ...waypoint, index: state.currentIndex + 1 });
+      }
     }
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
-    try {
-      window.gameClient?.world?.pathfinder?.findPath?.(from, to);
-      state.lastPathAt = now;
-      bot.log("cave pathing to waypoint", { ...waypoint, index: state.currentIndex + 1, total: route.length });
-      return true;
-    } catch (error) {
-      bot.log("cave pathing failed", { ...waypoint, error: error?.message || error });
-      return false;
-    }
+    try { window.gameClient?.world?.pathfinder?.findPath?.(from, to); state.lastPathAt = now; bot.log("cave pathing to waypoint", { ...waypoint, index: state.currentIndex + 1, total: route.length }); return true; }
+    catch (error) { bot.log("cave pathing failed", { ...waypoint, error: error?.message || error }); return false; }
   }
 
   function goToPosition(position) { if (!position) return false; return goToWaypoint(position); }
