@@ -353,7 +353,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   function completeRopeSpellWaypoint(index, fromZ, toZ) {
     resetRopeSpellState();
     const status = bot.cave?.status?.();
-    if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
+    if (status && Math.trunc(Number(status.currentIndex) || 0) === index) {
       bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
     }
     bot.log("cave rope spell floor change detected", { index: index + 1, fromZ, toZ });
