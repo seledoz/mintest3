@@ -988,12 +988,45 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     }
     return patched;
   }
+  function stepOntoExactRopeSpellWaypoint(waypoint, from) {
+    const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
+    const action = bot.cave?.getWaypointActions?.()[currentIndex];
+    const fromPos = normalizePosition(from);
+    const waypointPos = normalizePosition(waypoint);
+    if (
+      action !== "ropeSpell" ||
+      !fromPos ||
+      !waypointPos ||
+      fromPos.z !== waypointPos.z ||
+      Math.abs(fromPos.x - waypointPos.x) + Math.abs(fromPos.y - waypointPos.y) !== 1
+    ) {
+      return false;
+    }
+
+    const stepped = bot.caveArrowKeys?.stepToPosition?.(waypointPos);
+    if (!stepped) return false;
+
+    state.lastPathAt = Date.now();
+    bot.log("cave Rope Spell stepped onto exact waypoint tile", {
+      ...waypoint,
+      index: currentIndex + 1,
+      pathfinderMode: config.pathfinderMode,
+    });
+    return true;
+  }
+
   function goToWaypoint(waypoint) {
     patchFieldWalkabilityForCavePathing();
     patchRopeSpellWaypointWalkability(waypoint);
     const from = bot.getPlayerPosition();
     if (!from || !waypoint) return false;
     const now = Date.now();
+
+    // All CaveBot pathing modes eventually call goToWaypoint(). Handle the
+    // final one-tile move for Rope Spell centrally so Game, Direct, A*, and
+    // any future mode use the same exact-tile behavior.
+    if (stepOntoExactRopeSpellWaypoint(waypoint, from)) return true;
+
     if (config.pathfinderMode === 'astar') {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
@@ -1020,22 +1053,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
           // native pathfinder can refuse the final hole tile. If we are one
           // step away, use the existing direct D-pad primitive here as well
           // (not only in the non-A* fallback below).
-          if (
-            waypointAction === "ropeSpell" &&
-            waypointPos &&
-            playerPos.z === waypointPos.z &&
-            targetTile.x === waypointPos.x &&
-            targetTile.y === waypointPos.y &&
-            Math.abs(playerPos.x - waypointPos.x) + Math.abs(playerPos.y - waypointPos.y) === 1
-          ) {
-            const stepped = bot.caveArrowKeys?.stepToPosition?.(waypointPos);
-            if (stepped) {
-              state.lastPathAt = now;
-              bot.log("cave Rope Spell stepped onto exact waypoint tile", { ...waypoint, index: currentIndex + 1 });
-              return true;
-            }
-          }
-
           try { window.gameClient?.world?.pathfinder?.findPath?.(from, to); state.lastPathAt = now; return true; }
           catch (error) { bot.log("cave A* pathing failed to target tile, falling back", { targetTile, error: error?.message || error }); }
         }
@@ -1051,21 +1068,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     // native pathfinder can reject a hole as a movement destination even
     // when the tile reports walkable. When the player is one step away,
     // use the existing D-pad movement primitive for that single step.
-    if (
-      waypointAction === "ropeSpell" &&
-      fromPos &&
-      waypointPos &&
-      fromPos.z === waypointPos.z &&
-      Math.abs(fromPos.x - waypointPos.x) + Math.abs(fromPos.y - waypointPos.y) === 1
-    ) {
-      const stepped = bot.caveArrowKeys?.stepToPosition?.(waypointPos);
-      if (stepped) {
-        state.lastPathAt = now;
-        bot.log("cave Rope Spell stepped onto exact waypoint tile", { ...waypoint, index: currentIndex + 1 });
-        return true;
-      }
-    }
-
     try { window.gameClient?.world?.pathfinder?.findPath?.(from, to); state.lastPathAt = now; bot.log("cave pathing to waypoint", { ...waypoint, index: state.currentIndex + 1, total: route.length }); return true; }
     catch (error) { bot.log("cave pathing failed", { ...waypoint, error: error?.message || error }); return false; }
   }
