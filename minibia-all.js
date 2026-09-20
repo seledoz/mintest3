@@ -132,13 +132,40 @@
     return code;
   }
   function ensureCavebotWaypointActionPanel(){
-    const add=document.getElementById("minibia-bot-cave-add"),section=add?.closest(".mb-section"); if(!section)return false;
+    const add=document.getElementById("minibia-bot-cave-add");
+    const section=add?.closest(".mb-section");
+    if(!add||!section)return false;
     let select=document.getElementById("minibia-bot-cave-waypoint-action");
-    if(!select){const field=document.createElement("label");field.className="mb-field";const label=document.createElement("span");label.className="mb-field-label";label.textContent="Waypoint Action";select=document.createElement("select");select.id="minibia-bot-cave-waypoint-action";[["walk","Walk"],["rope","Use Rope"],["ropeSpell","Rope Spell (Exani Tera)"],["haste","Haste Waypoint"],["shovel","Use Shovel"],["wait","Waypoint Wait (1 Minute)"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;select.appendChild(o)});field.append(label,select);const p=section.querySelector("#minibia-bot-cave-pathfinder-mode")?.closest(".mb-field");if(p)p.insertAdjacentElement("beforebegin",field);else section.querySelector(".mb-stack")?.appendChild(field)}
-    if(!document.getElementById("minibia-bot-cave-haste-spell")){const field=document.createElement("label");field.className="mb-field";field.id="minibia-bot-cave-haste-spell-field";const label=document.createElement("span");label.className="mb-field-label";label.textContent="Haste Spell";const input=document.createElement("input");input.type="text";input.id="minibia-bot-cave-haste-spell";input.placeholder="Enter spell, e.g. utani hur";field.append(label,input);select.insertAdjacentElement("afterend",field)}
+    if(!select){
+      const field=document.createElement("label");
+      field.className="mb-field";
+      field.id="minibia-bot-cave-waypoint-action-field";
+      const label=document.createElement("span");
+      label.className="mb-field-label";
+      label.textContent="Waypoint Action";
+      select=document.createElement("select");
+      select.id="minibia-bot-cave-waypoint-action";
+      [["walk","Walk"],["rope","Use Rope"],["ropeSpell","Rope Spell (Exani Tera)"],["haste","Haste Waypoint"],["shovel","Use Shovel"],["wait","Waypoint Wait (1 Minute)"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;select.appendChild(o)});
+      field.append(label,select);
+      const row=add.closest(".mb-row");
+      if(row)row.insertAdjacentElement("afterend",field);else add.insertAdjacentElement("afterend",field);
+    }
+    if(!document.getElementById("minibia-bot-cave-haste-spell")){
+      const field=document.createElement("label");field.className="mb-field";field.id="minibia-bot-cave-haste-spell-field";
+      const label=document.createElement("span");label.className="mb-field-label";label.textContent="Haste Spell";
+      const input=document.createElement("input");input.type="text";input.id="minibia-bot-cave-haste-spell";input.placeholder="Enter spell, e.g. utani hur";input.autocomplete="off";
+      field.append(label,input);select.closest(".mb-field")?.insertAdjacentElement("afterend",field);
+    }
     return true;
   }
+  function watchForCavebotWaypointActionPanel(){
+    if(ensureCavebotWaypointActionPanel())return;
+    if(window.__minibiaCaveWaypointPanelObserver)return;
+    const observer=new MutationObserver(()=>{if(ensureCavebotWaypointActionPanel()){observer.disconnect();window.__minibiaCaveWaypointPanelObserver=null;}});
+    window.__minibiaCaveWaypointPanelObserver=observer;
+    observer.observe(document.documentElement,{childList:true,subtree:true});
+  }
   async function loadSourceFile(path){const response=await fetch(`${rawBaseUrl}/${path}?t=${Date.now()}`,{cache:"no-store"});if(!response.ok)throw new Error(`Failed to load ${path}: HTTP ${response.status}`);const rawCode=await response.text();let code=addSafeUiPerformanceOptimizations(rawCode,path);if(path==="src/version.js")code=code.replaceAll("%%BRANCH%%",ref).replaceAll("%%COMMIT%%","source-loader").replaceAll("%%DATE%%",new Date().toISOString());const sourceUrl=`${rawBaseUrl}/${path}`;try{(0,eval)(`${code}\n//# sourceURL=${sourceUrl}`);}catch(error){if(path==="src/modules/cave.js"&&code!==rawCode){console.warn("[minibia-bot] CaveBot transformed source failed; retrying original cave.js source",error);try{(0,eval)(`${rawCode}\n//# sourceURL=${sourceUrl}`);return;}catch(rawError){console.error("[minibia-bot] Original cave.js source also failed",rawError);throw rawError;}}console.error(`[minibia-bot] Failed to evaluate ${path}`,error);throw error;}}
-  async function load(){purgeLegacyCaveWaitDelay();if(window.minibiaBot?.destroy){try{window.minibiaBot.destroy();}catch(error){console.warn("[minibia-bot] Existing bot cleanup failed",error);}}purgeLegacyCaveWaitDelay();installUiCompatibilityShim();delete window.__minibiaBotBundle;window.__minibiaBotBundle={};for(const path of sourceFiles)await loadSourceFile(path);purgeLegacyCaveWaitDelay();ensureCavebotWaypointActionPanel();window.setTimeout(ensureCavebotWaypointActionPanel,250);window.setTimeout(ensureCavebotWaypointActionPanel,1000);keepPanelTitleBlank();normalizeCavePathfinderModeUi();window.setTimeout(normalizeCavePathfinderModeUi,250);window.setTimeout(normalizeCavePathfinderModeUi,1000);console.log(`[minibia-bot] Loaded source files from ${repository}@${ref}`);}
+  async function load(){purgeLegacyCaveWaitDelay();if(window.minibiaBot?.destroy){try{window.minibiaBot.destroy();}catch(error){console.warn("[minibia-bot] Existing bot cleanup failed",error);}}purgeLegacyCaveWaitDelay();installUiCompatibilityShim();delete window.__minibiaBotBundle;window.__minibiaBotBundle={};for(const path of sourceFiles)await loadSourceFile(path);purgeLegacyCaveWaitDelay();watchForCavebotWaypointActionPanel();window.setTimeout(watchForCavebotWaypointActionPanel,250);window.setTimeout(watchForCavebotWaypointActionPanel,1000);keepPanelTitleBlank();normalizeCavePathfinderModeUi();window.setTimeout(normalizeCavePathfinderModeUi,250);window.setTimeout(normalizeCavePathfinderModeUi,1000);console.log(`[minibia-bot] Loaded source files from ${repository}@${ref}`);}
   load().catch(error=>console.error("[minibia-bot] Source loader failed",error));
 })();
