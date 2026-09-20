@@ -31,6 +31,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     startZ: null,
     sentAt: 0,
     lastRetryAt: 0,
+    armed: true,
   };
   const hasteState = {
     lastCastKey: null,
@@ -434,12 +435,13 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     return true;
   }
 
-  function resetRopeSpellState() {
+  function resetRopeSpellState(arm = true) {
     ropeSpellState.active = false;
     ropeSpellState.index = -1;
     ropeSpellState.startZ = null;
     ropeSpellState.sentAt = 0;
     ropeSpellState.lastRetryAt = 0;
+    ropeSpellState.armed = arm;
   }
 
   function completeRopeSpellWaypoint(index, fromZ, toZ) {
@@ -464,6 +466,20 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const hotkey = getWaypointRopeSpellHotkeys()[index] || "";
     if (!hotkey) return false;
 
+    const atWaypoint = playerPosition.x === waypoint.x &&
+      playerPosition.y === waypoint.y &&
+      playerPosition.z === waypoint.z;
+
+    // One cast per physical arrival. A floor change fully re-arms the
+    // waypoint; after a failed 5-second attempt, require the player to
+    // leave the tile before another attempt can begin.
+    if (!atWaypoint) {
+      if (!ropeSpellState.active || ropeSpellState.index !== index) {
+        ropeSpellState.armed = true;
+      }
+      return false;
+    }
+
     const now = Date.now();
     if (ropeSpellState.active && ropeSpellState.index === index) {
       if (playerPosition.z !== ropeSpellState.startZ) {
@@ -472,19 +488,20 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       }
 
       if (now - ropeSpellState.sentAt >= ROPE_SPELL_MAX_WAIT_MS) {
-        resetRopeSpellState();
-      } else {
-        if (now - ropeSpellState.lastRetryAt < ROPE_SPELL_RETRY_MS) return true;
-        const sent = triggerRopeSpellHotkey(hotkey);
-        if (sent) {
-          ropeSpellState.lastRetryAt = now;
-          stopCurrentMovement();
-        }
+        resetRopeSpellState(false);
         return true;
       }
+
+      if (now - ropeSpellState.lastRetryAt < ROPE_SPELL_RETRY_MS) return true;
+      const sent = triggerRopeSpellHotkey(hotkey);
+      if (sent) {
+        ropeSpellState.lastRetryAt = now;
+        stopCurrentMovement();
+      }
+      return true;
     }
 
-    if (playerPosition.x !== waypoint.x || playerPosition.y !== waypoint.y || playerPosition.z !== waypoint.z) return false;
+    if (!ropeSpellState.armed) return true;
 
     const sent = triggerRopeSpellHotkey(hotkey);
     if (!sent) return false;
@@ -494,6 +511,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     ropeSpellState.startZ = playerPosition.z;
     ropeSpellState.sentAt = now;
     ropeSpellState.lastRetryAt = now;
+    ropeSpellState.armed = false;
     stopCurrentMovement();
     bot.log("cave rope spell hotkey triggered", { index: index + 1, hotkey, position: playerPosition });
     r  function runHasteWaypoint(index, waypoint, playerPosition) {
