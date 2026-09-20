@@ -1,9 +1,15 @@
 window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 (function installGlobalCaveFieldPathing() {
+  // Support both the classic Tibia field IDs (2118-2127/neutral 2131-2133)
+  // and the older OTServer-style IDs already used by this client.
   const FIRE_FIELD_IDS = new Set([
-    1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495,
-    1496, 1500, 1501, 1502,
+    1487, 1488, 1489,
+    1492, 1493, 1494,
+    1500, 1501, 1502,
+    2118, 2119, 2120,
+    2123, 2124, 2125,
+    2131, 2132, 2133,
   ]);
   const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
   const state = { timerId: null, installed: false, patchedTiles: new Set() };
@@ -145,10 +151,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const prototype = tile && Object.getPrototypeOf(tile);
     if (!prototype) return false;
 
-    // The game's native pathfinder may use a passability predicate other than
-    // isWalkable(). Patch the tile collision predicates themselves, but never
-    // replace the movement command. Fire fields are therefore just ordinary
-    // passable tiles to every native pathing implementation.
+    // The native pathfinder can use several collision predicates. Make a
+    // fire-field tile passable to all of them while Walk Over Fields is ON.
     const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk"];
     let patched = false;
     for (const name of predicates) {
@@ -183,10 +187,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     if (!pathfinder || typeof pathfinder.findPath !== "function") return false;
     if (pathfinder.findPath.__globalCaveFieldGuard) return true;
 
-    // Do not replace the game's movement/pathfinding algorithm. The only global
-    // change is making fire fields report as walkable while the toggle is ON.
-    // This keeps Game, Direct, Smart A, Smart A + Field Crossing and Arrow/D-pad
-    // on their native movement implementations.
+    // Keep the game's native movement/pathfinding algorithm. Only change
+    // fire-field passability while the toggle is enabled.
     const originalFindPath = pathfinder.findPath;
     function guardedFindPath(...args) {
       const status = bot.cave?.status?.();
