@@ -7,7 +7,15 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
   const configStorageKey = "minibiaBot.cave.config";
   const presetFieldKey = "minibiaBot.cave.walkOverFieldsPresets";
-  const FIRE_FIELD_IDS = new Set([1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1500, 1501, 1502]);
+  // Support both the classic Tibia field IDs and the older OTServer-style IDs.
+  const FIRE_FIELD_IDS = new Set([
+    1487, 1488, 1489,
+    1492, 1493, 1494,
+    1500, 1501, 1502,
+    2118, 2119, 2120,
+    2123, 2124, 2125,
+    2131, 2132, 2133,
+  ]);
 
   function normalizePosition(value) {
     if (!value) return null;
