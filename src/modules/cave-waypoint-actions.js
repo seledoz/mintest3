@@ -831,7 +831,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       if (ropeSpellHotkeyLabel) ropeSpellHotkeyLabel.style.display = isRopeSpell ? "" : "none";
       if (isRopeSpell && ropeSpellHotkeyInput) {
         const index = Math.max(0, (bot.cave?.getRoute?.().length || 1) - 1);
-        ropeSpellHotkeyInput.value = getWaypointRopeSpellHotkeys()[index] || "";
+        const savedHotkey = getWaypointRopeSpellHotkeys()[index] || "";
+        ropeSpellHotkeyInput.value = savedHotkey ? Number(savedHotkey.slice(1)) : "";
       }
     };
 
@@ -864,7 +865,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const syncHasteHotkeyVisibility = () => {
       const isHaste = select.value === hasteAction;
       if (hasteHotkeyLabel) hasteHotkeyLabel.style.display = isHaste ? "" : "none";
-      if (isHaste && hasteHotkeyInput) { const index = Math.max(0, (bot.cave?.getRoute?.().length || 1) - 1); hasteHotkeyInput.value = getWaypointHasteHotkeys()[index] || ""; }
+      if (isHaste && hasteHotkeyInput) { const index = Math.max(0, (bot.cave?.getRoute?.().length || 1) - 1); const savedHotkey = getWaypointHasteHotkeys()[index] || "";
+        hasteHotkeyInput.value = savedHotkey ? Number(savedHotkey.slice(1)) : ""; }
     };
     if (hasteHotkeyInput && !hasteHotkeyInput.__caveWaypointActionsKeyBound) {
       hasteHotkeyInput.addEventListener("keydown", (event) => { const key = normalizeRopeSpellHotkey(event.key); if (!key) return; event.preventDefault(); event.stopPropagation(); hasteHotkeyInput.value = key; if (select.value === hasteAction) setLastWaypointHasteHotkey(key); });
