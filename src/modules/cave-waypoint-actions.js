@@ -13,11 +13,19 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   ];
   const noopAction = "walk";
   const ropeAction = "rope";
+  const ropeSpellAction = "ropeSpell";
   const shovelAction = "shovel";
+  const ropeSpellText = "Exani Tera";
   const waitAction = "wait";
   const waitDurationMs = 60 * 1000;
   let lastToolUseAt = 0;
   let lastHandledKey = null;
+  const ropeSpellState = {
+    active: false,
+    index: -1,
+    startZ: null,
+    sentAt: 0,
+  };
   const waitState = {
     active: false,
     presetName: null,
@@ -34,7 +42,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   }
 
   function normalizeAction(action) {
-    if (action === ropeAction || action === shovelAction || action === waitAction) return action;
+    if (action === ropeAction || action === ropeSpellAction || action === shovelAction || action === waitAction) return action;
     return noopAction;
   }
 
@@ -216,6 +224,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
   function isAtWaypoint(position, waypoint) {
     if (!position || !waypoint || position.z !== waypoint.z) return false;
+    const actionIndex = Math.trunc(Number(bot.cave?.status?.()?.currentIndex) || 0);
+    const action = getWaypointActions()[actionIndex];
+    if (action === ropeSpellAction) {
+      return position.x === waypoint.x && position.y === waypoint.y && position.z === waypoint.z;
+    }
     const tolerance = Math.max(1, Math.trunc(Number(bot.cave?.status?.()?.config?.waypointTolerance) || 1));
     return Math.abs(position.x - waypoint.x) <= tolerance && Math.abs(position.y - waypoint.y) <= tolerance;
   }
@@ -273,6 +286,39 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       toolSlot: toolEntry.index,
       toolName: getThingName(toolEntry.item),
     });
+    return true;
+  }
+
+  function runRopeSpellWaypoint(index, waypoint, playerPosition) {
+    if (!playerPosition || !waypoint || playerPosition.x !== waypoint.x || playerPosition.y !== waypoint.y || playerPosition.z !== waypoint.z) return false;
+
+    if (ropeSpellState.active && ropeSpellState.index === index) {
+      if (playerPosition.z !== ropeSpellState.startZ) {
+        ropeSpellState.active = false;
+        ropeSpellState.index = -1;
+        const status = bot.cave?.status?.();
+        if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
+          const nextIndex = getNextRouteIndex(status);
+          bot.cave?.setCurrentIndex?.(nextIndex);
+        }
+        bot.log("cave rope spell floor change detected", { index: index + 1, fromZ: ropeSpellState.startZ, toZ: playerPosition.z });
+        return true;
+      }
+      return true;
+    }
+
+    const sent = bot.sendChat?.(ropeSpellText);
+    if (!sent) {
+      bot.log("cave rope spell waypoint failed to send spell", { index: index + 1, spell: ropeSpellText });
+      return false;
+    }
+
+    ropeSpellState.active = true;
+    ropeSpellState.index = index;
+    ropeSpellState.startZ = playerPosition.z;
+    ropeSpellState.sentAt = Date.now();
+    stopCurrentMovement();
+    bot.log("cave rope spell cast", { index: index + 1, spell: ropeSpellText, position: playerPosition });
     return true;
   }
 
@@ -400,6 +446,15 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     if (!waypoint || action === noopAction) return;
 
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
+    if (action !== ropeSpellAction && ropeSpellState.active && ropeSpellState.index === index) {
+      ropeSpellState.active = false;
+      ropeSpellState.index = -1;
+      ropeSpellState.startZ = null;
+    }
+    if (action === ropeSpellAction) {
+      runRopeSpellWaypoint(index, waypoint, playerPosition);
+      return;
+    }
     if (action === waitAction) {
       if (isAtWaypoint(playerPosition, waypoint)) startWaypointWait(status, index, waypoint);
       return;
@@ -530,6 +585,10 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       ropeOption.value = ropeAction;
       ropeOption.textContent = "Use Rope";
 
+      const ropeSpellOption = document.createElement("option");
+      ropeSpellOption.value = ropeSpellAction;
+      ropeSpellOption.textContent = "Rope Spell (Exani Tera)";
+
       const shovelOption = document.createElement("option");
       shovelOption.value = shovelAction;
       shovelOption.textContent = "Use Shovel";
@@ -540,6 +599,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
       select.appendChild(walkOption);
       select.appendChild(ropeOption);
+      select.appendChild(ropeSpellOption);
       select.appendChild(shovelOption);
       select.appendChild(waitOption);
       wrapper.appendChild(label);
@@ -587,6 +647,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   bot.cave.setWaypointAction = setWaypointAction;
   bot.cave.setLastWaypointAction = setLastWaypointAction;
   bot.cave.useRopeOnNearestHole = useRopeOnNearestHole;
+  bot.cave.isWaypointActionBlocking = (index) => getWaypointActions()[Math.trunc(Number(index) || 0)] === ropeSpellAction;
   bot.cave.useShovelOnNearestHole = useShovelOnNearestHole;
   bot.cave.waypointWaitStatus = () => ({
     active: waitState.active,
