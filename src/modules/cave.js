@@ -1297,8 +1297,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         waypoint = advanceWaypoint();
       }
       if (!waypoint) { bot.logDebug("cave no waypoint after advance, stopping"); return; }
-      if (blockingWaypointAction) {
-        bot.logDebug("cave holding Rope Spell waypoint for action handler", { index: state.currentIndex + 1, waypoint, exactWaypoint });
+      if (blockingWaypointAction && exactWaypoint) {
+        bot.logDebug("cave holding exact Rope Spell waypoint", { index: state.currentIndex + 1, waypoint });
         return;
       }
       if (position && waypoint.z !== position.z) {
