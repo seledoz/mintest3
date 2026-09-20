@@ -153,11 +153,14 @@
     return true;
   }
   function watchForCavebotWaypointActionPanel(){
-    if(ensureCavebotWaypointActionPanel())return;
+    ensureCavebotWaypointActionPanel();
     if(window.__minibiaCaveWaypointPanelObserver)return;
-    const observer=new MutationObserver(()=>{if(ensureCavebotWaypointActionPanel()){observer.disconnect();window.__minibiaCaveWaypointPanelObserver=null;}});
+    const observer=new MutationObserver(()=>{ensureCavebotWaypointActionPanel();});
     window.__minibiaCaveWaypointPanelObserver=observer;
     observer.observe(document.documentElement,{childList:true,subtree:true});
+    if(!window.__minibiaCaveWaypointPanelInterval){
+      window.__minibiaCaveWaypointPanelInterval=window.setInterval(()=>{ensureCavebotWaypointActionPanel();},250);
+    }
   }
   async function loadSourceFile(path){const response=await fetch(`${rawBaseUrl}/${path}?t=${Date.now()}`,{cache:"no-store"});if(!response.ok)throw new Error(`Failed to load ${path}: HTTP ${response.status}`);const rawCode=await response.text();let code=addSafeUiPerformanceOptimizations(rawCode,path);if(path==="src/version.js")code=code.replaceAll("%%BRANCH%%",ref).replaceAll("%%COMMIT%%","source-loader").replaceAll("%%DATE%%",new Date().toISOString());const sourceUrl=`${rawBaseUrl}/${path}`;try{(0,eval)(`${code}\n//# sourceURL=${sourceUrl}`);}catch(error){if(path==="src/modules/cave.js"&&code!==rawCode){console.warn("[minibia-bot] CaveBot transformed source failed; retrying original cave.js source",error);try{(0,eval)(`${rawCode}\n//# sourceURL=${sourceUrl}`);return;}catch(rawError){console.error("[minibia-bot] Original cave.js source also failed",rawError);throw rawError;}}console.error(`[minibia-bot] Failed to evaluate ${path}`,error);throw error;}}
   async function load(){purgeLegacyCaveWaitDelay();if(window.minibiaBot?.destroy){try{window.minibiaBot.destroy();}catch(error){console.warn("[minibia-bot] Existing bot cleanup failed",error);}}purgeLegacyCaveWaitDelay();installUiCompatibilityShim();delete window.__minibiaBotBundle;window.__minibiaBotBundle={};for(const path of sourceFiles)await loadSourceFile(path);purgeLegacyCaveWaitDelay();watchForCavebotWaypointActionPanel();window.setTimeout(watchForCavebotWaypointActionPanel,250);window.setTimeout(watchForCavebotWaypointActionPanel,1000);keepPanelTitleBlank();normalizeCavePathfinderModeUi();window.setTimeout(normalizeCavePathfinderModeUi,250);window.setTimeout(normalizeCavePathfinderModeUi,1000);console.log(`[minibia-bot] Loaded source files from ${repository}@${ref}`);}
