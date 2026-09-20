@@ -116,7 +116,8 @@
 
   function enforceCaveControls() {
     normalizePathfinderModeUi();
-    removeWaypointActions();
+    // Keep the Cavebot Waypoint Action control. It is part of the current
+    // Cavebot UI and is installed by the waypoint-actions module.
     injectWaypointWaitButton();
   }
 
