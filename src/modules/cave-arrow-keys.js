@@ -63,7 +63,7 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
 
   function isArrowModeActive() {
     const caveStatus = bot.cave?.status?.() || null;
-    return !!(caveStatus?.running && (caveStatus?.config?.pathfinderMode === "arrow" || caveStatus?.config?.walkOverFields));
+    return !!(caveStatus?.running && caveStatus?.config?.pathfinderMode === "arrow");
   }
 
   function isWalkOverFieldsEnabled() {
