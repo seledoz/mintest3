@@ -486,11 +486,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       position: playerPosition,
     });
 
-    const status = bot.cave?.status?.();
-    if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
-      bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
-    }
-
+    // Do not advance the route immediately after casting. Rope Spell is
+    // an exact-tile action and must remain the active waypoint until the
+    // floor change is actually detected.
     return true;
   }
 
