@@ -842,6 +842,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
         ropeSpellHotkeyInput.value = key;
         if (select.value === ropeSpellAction) setLastWaypointRopeSpellHotkey(key);
       });
+      ropeSpellHotkeyInput.addEventListener("change", () => { const value = Math.trunc(Number(ropeSpellHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === ropeSpellAction) setLastWaypointRopeSpellHotkey(`F${value}`); else if (value < 1 || value > 12) ropeSpellHotkeyInput.value = ""; });
       ropeSpellHotkeyInput.__caveWaypointActionsKeyBound = true;
     }
 
@@ -865,6 +866,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     };
     if (hasteHotkeyInput && !hasteHotkeyInput.__caveWaypointActionsKeyBound) {
       hasteHotkeyInput.addEventListener("keydown", (event) => { const key = normalizeRopeSpellHotkey(event.key); if (!key) return; event.preventDefault(); event.stopPropagation(); hasteHotkeyInput.value = key; if (select.value === hasteAction) setLastWaypointHasteHotkey(key); });
+      hasteHotkeyInput.addEventListener("change", () => { const value = Math.trunc(Number(hasteHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === hasteAction) setLastWaypointHasteHotkey(`F${value}`); else if (value < 1 || value > 12) hasteHotkeyInput.value = ""; });
       hasteHotkeyInput.__caveWaypointActionsKeyBound = true;
     }
     if (!select.__caveWaypointActionsHasteChangeBound) { select.addEventListener("change", syncHasteHotkeyVisibility); select.__caveWaypointActionsHasteChangeBound = true; }
