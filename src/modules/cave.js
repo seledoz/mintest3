@@ -897,6 +897,15 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
   function isAtWaypoint(position, waypoint) {
     if (!position || !waypoint || Number(position.z) !== Number(waypoint.z)) return false;
+    // When Walk Over Fields is enabled, a fire-field waypoint must be reached
+    // exactly. Otherwise the normal waypoint tolerance can stop the bot one
+    // tile away, which prevents the final step onto the field.
+    if (config.walkOverFields) {
+      const waypointTile = getTileAt(waypoint);
+      if (isFireFieldTileForCavePathing(waypointTile)) {
+        return Number(position.x) === Number(waypoint.x) && Number(position.y) === Number(waypoint.y);
+      }
+    }
     const tolerance = Math.max(1, Math.trunc(Number(config.waypointTolerance) || 0));
     const dx = Math.abs(Number(position.x) - Number(waypoint.x));
     const dy = Math.abs(Number(position.y) - Number(waypoint.y));
