@@ -914,55 +914,10 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
   function isAtWaypoint(position, waypoint) {
     if (!position || !waypoint || Number(position.z) !== Number(waypoint.z)) return false;
-    // When Walk Over Fields is enabled, a fire-field waypoint must be reached
-    // exactly. Otherwise the normal waypoint tolerance can stop the bot one
-    // tile away, which prevents the final step onto the field.
-    if (config.walkOverFields) {
-      const waypointTile = getTileAt(waypoint);
-      if (isFireFieldTileForCavePathing(waypointTile)) {
-        return Number(position.x) === Number(waypoint.x) && Number(position.y) === Number(waypoint.y);
-      }
-    }
     const tolerance = Math.max(1, Math.trunc(Number(config.waypointTolerance) || 0));
     const dx = Math.abs(Number(position.x) - Number(waypoint.x));
     const dy = Math.abs(Number(position.y) - Number(waypoint.y));
     return dx <= tolerance && dy <= tolerance;
-  }
-
-  function clickDpadTowardAdjacentFireField(from, target) {
-    if (!config.walkOverFields || !from || !target || from.z !== target.z) return false;
-    const dx = target.x - from.x;
-    const dy = target.y - from.y;
-    let key = null;
-    if (dx === 1 && dy === 0) key = "ArrowRight";
-    else if (dx === -1 && dy === 0) key = "ArrowLeft";
-    else if (dx === 0 && dy === 1) key = "ArrowDown";
-    else if (dx === 0 && dy === -1) key = "ArrowUp";
-    if (!key) return false;
-    const buttons = {};
-    const normalize = (value) => String(value || "").replace(/\\uFE0E|\\uFE0F/g, "").replace(/\\s+/g, "").toLowerCase();
-    for (const button of Array.from(document.querySelectorAll("button"))) {
-      const values = [button.textContent, button.getAttribute("aria-label"), button.getAttribute("title"), button.dataset?.direction, button.dataset?.key].map(normalize);
-      let buttonKey = null;
-      if (values.includes("▲") || values.includes("up") || values.includes("north") || values.includes("arrowup")) buttonKey = "ArrowUp";
-      else if (values.includes("▶") || values.includes("right") || values.includes("east") || values.includes("arrowright")) buttonKey = "ArrowRight";
-      else if (values.includes("▼") || values.includes("down") || values.includes("south") || values.includes("arrowdown")) buttonKey = "ArrowDown";
-      else if (values.includes("◀") || values.includes("left") || values.includes("west") || values.includes("arrowleft")) buttonKey = "ArrowLeft";
-      if (buttonKey && !buttons[buttonKey]) buttons[buttonKey] = button;
-    }
-    const button = buttons[key];
-    if (!button) return false;
-    try { button.click(); state.lastPathAt = Date.now(); return true; } catch (_) { return false; }
-  }
-
-  function stepOntoFireFieldWaypoint(waypoint) {
-    if (!config.walkOverFields || !waypoint) return false;
-    const from = normalizePosition(bot.getPlayerPosition());
-    const target = normalizePosition(waypoint);
-    if (!from || !target || from.z !== target.z || !isAdjacentTile(from, target)) return false;
-    const tile = getTileAt(target);
-    if (!isFireFieldTileForCavePathing(tile)) return false;
-    return clickDpadTowardAdjacentFireField(from, target);
   }
 
   function goToWaypoint(waypoint) {
@@ -970,15 +925,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const from = bot.getPlayerPosition();
     if (!from || !waypoint) return false;
     const now = Date.now();
-    if (config.walkOverFields && isFireFieldTileForCavePathing(getTileAt(waypoint))) {
-      const fromPos = normalizePosition(from);
-      const waypointPos = normalizePosition(waypoint);
-      if (fromPos && waypointPos && fromPos.z === waypointPos.z) {
-        const dx = waypointPos.x - fromPos.x;
-        const dy = waypointPos.y - fromPos.y;
-        if (Math.abs(dx) + Math.abs(dy) === 1 && stepOntoFireFieldWaypoint(waypointPos)) return true;
-      }
-    }
     if (config.pathfinderMode === 'astar') {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
