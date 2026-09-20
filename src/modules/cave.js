@@ -903,8 +903,53 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return dx <= tolerance && dy <= tolerance;
   }
 
+  function clickDpadTowardAdjacentFireField(from, target) {
+    if (!config.walkOverFields || !from || !target || from.z !== target.z) return false;
+    const dx = target.x - from.x;
+    const dy = target.y - from.y;
+    let key = null;
+    if (dx === 1 && dy === 0) key = "ArrowRight";
+    else if (dx === -1 && dy === 0) key = "ArrowLeft";
+    else if (dx === 0 && dy === 1) key = "ArrowDown";
+    else if (dx === 0 && dy === -1) key = "ArrowUp";
+    if (!key) return false;
+    const buttons = {};
+    const normalize = (value) => String(value || "").replace(/\\uFE0E|\\uFE0F/g, "").replace(/\\s+/g, "").toLowerCase();
+    for (const button of Array.from(document.querySelectorAll("button"))) {
+      const values = [button.textContent, button.getAttribute("aria-label"), button.getAttribute("title"), button.dataset?.direction, button.dataset?.key].map(normalize);
+      let buttonKey = null;
+      if (values.includes("▲") || values.includes("up") || values.includes("north") || values.includes("arrowup")) buttonKey = "ArrowUp";
+      else if (values.includes("▶") || values.includes("right") || values.includes("east") || values.includes("arrowright")) buttonKey = "ArrowRight";
+      else if (values.includes("▼") || values.includes("down") || values.includes("south") || values.includes("arrowdown")) buttonKey = "ArrowDown";
+      else if (values.includes("◀") || values.includes("left") || values.includes("west") || values.includes("arrowleft")) buttonKey = "ArrowLeft";
+      if (buttonKey && !buttons[buttonKey]) buttons[buttonKey] = button;
+    }
+    const button = buttons[key];
+    if (!button) return false;
+    try {
+      button.click();
+      state.lastPathAt = Date.now();
+      bot.logDebug("cave stepped onto fire field", { from, target, key });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function stepOntoFireFieldWaypoint(waypoint) {
+    if (!config.walkOverFields || !waypoint) return false;
+    const from = normalizePosition(bot.getPlayerPosition());
+    const target = normalizePosition(waypoint);
+    if (!from || !target || from.z !== target.z) return false;
+    if (!isAdjacentTile(from, target)) return false;
+    const tile = getTileAt(target);
+    if (!isFireFieldTileForCavePathing(tile)) return false;
+    return clickDpadTowardAdjacentFireField(from, target);
+  }
+
   function goToWaypoint(waypoint) {
     patchFieldWalkabilityForCavePathing();
+    if (stepOntoFireFieldWaypoint(waypoint)) return true;
     const from = bot.getPlayerPosition();
     if (!from || !waypoint) return false;
     const now = Date.now();
