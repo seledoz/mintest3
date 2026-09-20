@@ -4,6 +4,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   const actionStorageKey = "minibiaBot.cave.waypointActions";
   const hasteSpellStorageKey = "minibiaBot.cave.waypointHasteSpells";
   const ropeSpellHotkeyStorageKey = "minibiaBot.cave.waypointRopeSpellHotkeys";
+  const hasteHotkeyStorageKey = "minibiaBot.cave.waypointHasteHotkeys";
   const ropeNamePattern = /\brope\b/i;
   const shovelNamePattern = /\bshovel\b/i;
   const shovelTargetNamePatterns = [
@@ -86,6 +87,46 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const routeLength = bot.cave?.getRoute?.().length || 0;
     const actions = getPresetActions();
     return Array.from({ length: routeLength }, (_, index) => normalizeAction(actions[index]));
+  }
+
+  function readAllHasteHotkeys() {
+    const raw = bot.storage.get(hasteHotkeyStorageKey, {});
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  }
+
+  function getPresetHasteHotkeys(name = getActivePresetName()) {
+    const allHotkeys = readAllHasteHotkeys();
+    const hotkeys = allHotkeys[normalizePresetName(name)];
+    return Array.isArray(hotkeys) ? hotkeys.slice() : [];
+  }
+
+  function savePresetHasteHotkeys(hotkeys, name = getActivePresetName()) {
+    const allHotkeys = readAllHasteHotkeys();
+    const routeLength = bot.cave?.getRoute?.().length || 0;
+    allHotkeys[normalizePresetName(name)] = Array.from({ length: routeLength }, (_, index) => normalizeRopeSpellHotkey(hotkeys[index]));
+    bot.storage.set(hasteHotkeyStorageKey, allHotkeys);
+    return allHotkeys[normalizePresetName(name)].slice();
+  }
+
+  function getWaypointHasteHotkeys() {
+    const routeLength = bot.cave?.getRoute?.().length || 0;
+    const hotkeys = getPresetHasteHotkeys();
+    return Array.from({ length: routeLength }, (_, index) => normalizeRopeSpellHotkey(hotkeys[index]));
+  }
+
+  function setWaypointHasteHotkey(index, hotkey) {
+    const routeLength = bot.cave?.getRoute?.().length || 0;
+    const normalizedIndex = Math.trunc(Number(index));
+    if (!Number.isFinite(normalizedIndex) || normalizedIndex < 0 || normalizedIndex >= routeLength) return null;
+    const hotkeys = getWaypointHasteHotkeys();
+    hotkeys[normalizedIndex] = normalizeRopeSpellHotkey(hotkey);
+    savePresetHasteHotkeys(hotkeys);
+    return hotkeys[normalizedIndex];
+  }
+
+  function setLastWaypointHasteHotkey(hotkey) {
+    const routeLength = bot.cave?.getRoute?.().length || 0;
+    return routeLength ? setWaypointHasteHotkey(routeLength - 1, hotkey) : null;
   }
 
   function readAllRopeSpellHotkeys() {
@@ -458,30 +499,17 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   function runHasteWaypoint(index, waypoint, playerPosition) {
     if (!playerPosition || !waypoint) return false;
     if (!isAtWaypoint(playerPosition, waypoint)) return false;
-
     const castKey = `${getActivePresetName()}:${index}`;
     if (hasteState.lastCastKey === castKey) return true;
-
-    const spell = getWaypointHasteSpells()[index];
-    if (!spell) {
-      bot.log("cave haste waypoint skipped: no spell entered", { index: index + 1 });
-      hasteState.lastCastKey = castKey;
-      return true;
-    }
-
-    const sent = bot.sendChat?.(spell);
-    if (!sent) {
-      bot.log("cave haste waypoint failed to send spell", { index: index + 1, spell });
-      return false;
-    }
-
+    const hotkey = getWaypointHasteHotkeys()[index] || "";
+    if (!hotkey) return false;
+    const slot = Number(hotkey.slice(1));
+    const sent = bot.clickHotbar?.(slot - 1);
+    if (!sent) return false;
     hasteState.lastCastKey = castKey;
-    bot.log("cave haste waypoint cast", { index: index + 1, spell, position: playerPosition });
-
+    bot.log("cave haste waypoint hotkey triggered", { index: index + 1, hotkey, position: playerPosition });
     const status = bot.cave?.status?.();
-    if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
-      bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
-    }
+    if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
     return true;
   }
 
@@ -822,65 +850,26 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       select.__caveWaypointActionsRopeSpellChangeBound = true;
     }
 
-    let hasteSpellLabel = document.getElementById("minibia-bot-cave-haste-spell")?.closest(".mb-field");
-    let hasteSpellInput = document.getElementById("minibia-bot-cave-haste-spell");
-    if (!hasteSpellInput) {
-      hasteSpellLabel = document.createElement("label");
-      hasteSpellLabel.className = "mb-field";
-      hasteSpellLabel.setAttribute("for", "minibia-bot-cave-haste-spell");
-
-      const hasteSpellText = document.createElement("span");
-      hasteSpellText.className = "mb-field-label";
-      hasteSpellText.textContent = "Haste Spell";
-
-      hasteSpellInput = document.createElement("input");
-      hasteSpellInput.type = "text";
-      hasteSpellInput.id = "minibia-bot-cave-haste-spell";
-      hasteSpellInput.placeholder = "Enter spell, e.g. utani hur";
-      hasteSpellInput.autocomplete = "off";
-      hasteSpellLabel.appendChild(hasteSpellText);
-      hasteSpellLabel.appendChild(hasteSpellInput);
-      select.closest(".mb-field")?.insertAdjacentElement("afterend", hasteSpellLabel);
+    let hasteHotkeyLabel = document.getElementById("minibia-bot-cave-haste-hotkey")?.closest(".mb-field");
+    let hasteHotkeyInput = document.getElementById("minibia-bot-cave-haste-hotkey");
+    if (!hasteHotkeyInput) {
+      hasteHotkeyLabel = document.createElement("label"); hasteHotkeyLabel.className = "mb-field";
+      const hotkeyText = document.createElement("span"); hotkeyText.className = "mb-field-label"; hotkeyText.textContent = "Haste Hotkey";
+      hasteHotkeyInput = document.createElement("input"); hasteHotkeyInput.type = "text"; hasteHotkeyInput.id = "minibia-bot-cave-haste-hotkey"; hasteHotkeyInput.placeholder = "Press F1-F12"; hasteHotkeyInput.readOnly = true;
+      hasteHotkeyLabel.appendChild(hotkeyText); hasteHotkeyLabel.appendChild(hasteHotkeyInput); select.closest(".mb-field")?.insertAdjacentElement("afterend", hasteHotkeyLabel);
     }
-
-    const syncHasteSpellVisibility = () => {
+    const syncHasteHotkeyVisibility = () => {
       const isHaste = select.value === hasteAction;
-      if (hasteSpellLabel) hasteSpellLabel.style.display = isHaste ? "" : "none";
-      if (isHaste && hasteSpellInput) {
-        const index = Math.max(0, (bot.cave?.getRoute?.().length || 1) - 1);
-        hasteSpellInput.value = getWaypointHasteSpells()[index] || "";
-      }
+      if (hasteHotkeyLabel) hasteHotkeyLabel.style.display = isHaste ? "" : "none";
+      if (isHaste && hasteHotkeyInput) { const index = Math.max(0, (bot.cave?.getRoute?.().length || 1) - 1); hasteHotkeyInput.value = getWaypointHasteHotkeys()[index] || ""; }
     };
-
-    if (!select.__caveWaypointActionsChangeBound) {
-      select.addEventListener("change", syncHasteSpellVisibility);
-      select.__caveWaypointActionsChangeBound = true;
+    if (hasteHotkeyInput && !hasteHotkeyInput.__caveWaypointActionsKeyBound) {
+      hasteHotkeyInput.addEventListener("keydown", (event) => { const key = normalizeRopeSpellHotkey(event.key); if (!key) return; event.preventDefault(); event.stopPropagation(); hasteHotkeyInput.value = key; if (select.value === hasteAction) setLastWaypointHasteHotkey(key); });
+      hasteHotkeyInput.__caveWaypointActionsKeyBound = true;
     }
-
-    if (!recordButton.__caveWaypointActionsClickBound) {
-      recordButton.addEventListener("click", () => {
-        window.setTimeout(() => {
-          const action = select.value;
-          setLastWaypointAction(action);
-          if (action === ropeSpellAction && ropeSpellHotkeyInput) setLastWaypointRopeSpellHotkey(ropeSpellHotkeyInput.value);
-          if (action === hasteAction && hasteSpellInput) setLastWaypointHasteSpell(hasteSpellInput.value);
-          syncRopeSpellHotkeyVisibility();
-          syncHasteSpellVisibility();
-        }, 0);
-      });
-      recordButton.__caveWaypointActionsClickBound = true;
-    }
-
-    if (hasteSpellInput && !hasteSpellInput.__caveWaypointActionsChangeBound) {
-      hasteSpellInput.addEventListener("change", () => {
-        if (select.value === hasteAction) setLastWaypointHasteSpell(hasteSpellInput.value);
-      });
-      hasteSpellInput.__caveWaypointActionsChangeBound = true;
-    }
-
-    syncRopeSpellHotkeyVisibility();
-    syncHasteSpellVisibility();
-
+    if (!select.__caveWaypointActionsHasteChangeBound) { select.addEventListener("change", syncHasteHotkeyVisibility); select.__caveWaypointActionsHasteChangeBound = true; }
+    if (!recordButton.__caveWaypointActionsHasteClickBound) { recordButton.addEventListener("click", () => window.setTimeout(() => { if (select.value === hasteAction && hasteHotkeyInput) setLastWaypointHasteHotkey(hasteHotkeyInput.value); syncHasteHotkeyVisibility(); }, 0)); recordButton.__caveWaypointActionsHasteClickBound = true; }
+    syncRopeSpellHotkeyVisibility(); syncHasteHotkeyVisibility();
     if (!document.getElementById("minibia-bot-cave-record-wait")) {
       const waitButton = document.createElement("button");
       waitButton.type = "button";
@@ -937,6 +926,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   bot.cave.getWaypointRopeSpellHotkeys = getWaypointRopeSpellHotkeys;
   bot.cave.setWaypointRopeSpellHotkey = setWaypointRopeSpellHotkey;
   bot.cave.setLastWaypointRopeSpellHotkey = setLastWaypointRopeSpellHotkey;
+  bot.cave.getWaypointHasteHotkeys = getWaypointHasteHotkeys;
+  bot.cave.setWaypointHasteHotkey = setWaypointHasteHotkey;
+  bot.cave.setLastWaypointHasteHotkey = setLastWaypointHasteHotkey;
   bot.cave.getWaypointHasteSpells = getWaypointHasteSpells;
   bot.cave.setWaypointHasteSpell = setWaypointHasteSpell;
   bot.cave.setLastWaypointHasteSpell = setLastWaypointHasteSpell;
