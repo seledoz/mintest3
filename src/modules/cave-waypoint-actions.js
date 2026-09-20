@@ -3,8 +3,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCaveWaypointActionsModule(bot) {
   const actionStorageKey = "minibiaBot.cave.waypointActions";
   const hasteSpellStorageKey = "minibiaBot.cave.waypointHasteSpells";
+  const ropeSpellHotkeyStorageKey = "minibiaBot.cave.waypointRopeSpellHotkeys";
   const hasteHotkeyStorageKey = "minibiaBot.cave.waypointHasteHotkeys";
-  const ropeSpellHotkeyStorageKey = "minibiaBot.cave.waypointRopeSpellHotkey";
   const ropeNamePattern = /\brope\b/i;
   const shovelNamePattern = /\bshovel\b/i;
   const shovelTargetNamePatterns = [
@@ -128,26 +128,30 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     return writePresetHotkey(ropeSpellHotkeyStorageKey, hotkey, name);
   }
 
-  function migrateWaypointHotkeysToSeparateStorage() {
-    const shared = bot.storage.get("minibiaBot.cave.waypointHasteHotkeys", {});
-    const legacyRope = bot.storage.get("minibiaBot.cave.waypointRopeSpellHotkeys", {});
+  function migrateOldWaypointHotkeys() {
+    const oldHaste = bot.storage.get(hasteHotkeyStorageKey, {});
+    const oldRope = bot.storage.get(ropeSpellHotkeyStorageKey, {});
     const hasteOut = {};
     const ropeOut = {};
 
-    if (shared && typeof shared === "object" && !Array.isArray(shared)) {
-      Object.keys(shared).forEach((presetName) => {
-        const values = Array.isArray(shared[presetName]) ? shared[presetName] : [];
-        const value = values.map(normalizeWaypointHotkey).find(Boolean) || "";
+    if (oldHaste && typeof oldHaste === "object" && !Array.isArray(oldHaste)) {
+      Object.keys(oldHaste).forEach((presetName) => {
+        const value = Array.isArray(oldHaste[presetName])
+          ? oldHaste[presetName].map(normalizeWaypointHotkey).find(Boolean) || ""
+          : normalizeWaypointHotkey(oldHaste[presetName]);
         if (value) hasteOut[normalizePresetName(presetName)] = value;
       });
     }
-    if (legacyRope && typeof legacyRope === "object" && !Array.isArray(legacyRope)) {
-      Object.keys(legacyRope).forEach((presetName) => {
-        const values = Array.isArray(legacyRope[presetName]) ? legacyRope[presetName] : [];
-        const value = values.map(normalizeWaypointHotkey).find(Boolean) || "";
+
+    if (oldRope && typeof oldRope === "object" && !Array.isArray(oldRope)) {
+      Object.keys(oldRope).forEach((presetName) => {
+        const value = Array.isArray(oldRope[presetName])
+          ? oldRope[presetName].map(normalizeWaypointHotkey).find(Boolean) || ""
+          : normalizeWaypointHotkey(oldRope[presetName]);
         if (value) ropeOut[normalizePresetName(presetName)] = value;
       });
     }
+
     if (Object.keys(hasteOut).length) bot.storage.set(hasteHotkeyStorageKey, hasteOut);
     if (Object.keys(ropeOut).length) bot.storage.set(ropeSpellHotkeyStorageKey, ropeOut);
   }
@@ -485,9 +489,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     ropeSpellState.armed = false;
     stopCurrentMovement();
     bot.log("cave rope spell hotkey triggered", { index: index + 1, hotkey, position: playerPosition });
-  }
-
-  function runHasteWaypoint(index, waypoint, playerPosition) {
+    r  function runHasteWaypoint(index, waypoint, playerPosition) {
     if (!playerPosition || !waypoint) return false;
 
     // One cast per physical arrival. The waypoint re-arms only after the
@@ -755,8 +757,6 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       return result;
     };
   }
-
-  migrateWaypointHotkeysToSeparateStorage();
 
   const actionTimerId = window.setInterval(() => {
     try {
