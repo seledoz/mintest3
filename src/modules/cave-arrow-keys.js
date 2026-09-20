@@ -47,7 +47,7 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
   const config = { matrixCacheMs: 250, stepRetryMs: 250, maxStepRetries: 3 };
   const matrixCache = new Map();
   const damagingFieldIds = new Set([1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1500, 1501, 1502]);
-  const damagingFieldPattern = /(?:fire|poison|energy)\s*(?:field|wall|damage|ground|tile)/i;
+  const damagingFieldPattern = /(?:fire|flame|poison|energy)\s*(?:field|wall|damage|ground|tile)/i;
 
   function normalizePosition(value) {
     if (!value) return null;
@@ -88,9 +88,10 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     const things = [];
     const add = (v) => { if (!v) return; if (Array.isArray(v)) v.forEach(add); else if (!things.includes(v)) things.push(v); };
     if (tile.id) add(tile);
-    add(tile.items); add(tile.things); add(tile.topThing);
+    add(tile.items); add(tile.things); add(tile.objects); add(tile.topThing);
     try { add(tile.getItems?.()); } catch (_) {}
     try { add(tile.getThings?.()); } catch (_) {}
+    try { add(tile.getObjects?.()); } catch (_) {}
     try { add(tile.getTopThing?.()); } catch (_) {}
     return things;
   }
