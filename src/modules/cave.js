@@ -317,6 +317,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const text = [
         thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
         thing?.type, thing?.thingType, thing?.category,
+        thing?.properties?.name, thing?.properties?.field,
+        thing?.properties?.type, thing?.properties?.category,
         definition?.name, definition?.properties?.name,
         definition?.properties?.field, definition?.properties?.type,
         definition?.properties?.category,
@@ -681,8 +683,23 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function getTileThings(tile) {
     if (!tile) return [];
     const things = [];
-    if (tile.id) things.push(tile);
-    if (Array.isArray(tile.items)) tile.items.forEach((item) => { if (item) things.push(item); });
+    const add = (value) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        value.forEach(add);
+        return;
+      }
+      if (!things.includes(value)) things.push(value);
+    };
+    add(tile);
+    add(tile.items);
+    add(tile.things);
+    add(tile.objects);
+    add(tile.topThing);
+    try { add(tile.getItems?.()); } catch (_) {}
+    try { add(tile.getThings?.()); } catch (_) {}
+    try { add(tile.getObjects?.()); } catch (_) {}
+    try { add(tile.getTopThing?.()); } catch (_) {}
     return things;
   }
   function tileHasNamedThing(tile, needle) {
