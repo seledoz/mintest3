@@ -136,6 +136,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
   function normalizeRopeSpellHotkey(value) {
     const key = String(value || "").trim().toUpperCase();
+    const numeric = /^([1-9]|1[0-2])$/.exec(key);
+    if (numeric) return `F${numeric[1]}`;
     return /^F(?:[1-9]|1[0-2])$/.test(key) ? key : "";
   }
 
@@ -842,7 +844,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
         ropeSpellHotkeyInput.value = key;
         if (select.value === ropeSpellAction) setLastWaypointRopeSpellHotkey(key);
       });
-      ropeSpellHotkeyInput.addEventListener("change", () => { const value = Math.trunc(Number(ropeSpellHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === ropeSpellAction) setLastWaypointRopeSpellHotkey(`F${value}`); else if (value < 1 || value > 12) ropeSpellHotkeyInput.value = ""; });
+      ropeSpellHotkeyInput.addEventListener("input", () => { const value = Math.trunc(Number(ropeSpellHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === ropeSpellAction) setLastWaypointRopeSpellHotkey(`F${value}`); });
       ropeSpellHotkeyInput.__caveWaypointActionsKeyBound = true;
     }
 
@@ -866,7 +868,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     };
     if (hasteHotkeyInput && !hasteHotkeyInput.__caveWaypointActionsKeyBound) {
       hasteHotkeyInput.addEventListener("keydown", (event) => { const key = normalizeRopeSpellHotkey(event.key); if (!key) return; event.preventDefault(); event.stopPropagation(); hasteHotkeyInput.value = key; if (select.value === hasteAction) setLastWaypointHasteHotkey(key); });
-      hasteHotkeyInput.addEventListener("change", () => { const value = Math.trunc(Number(hasteHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === hasteAction) setLastWaypointHasteHotkey(`F${value}`); else if (value < 1 || value > 12) hasteHotkeyInput.value = ""; });
+      hasteHotkeyInput.addEventListener("input", () => { const value = Math.trunc(Number(hasteHotkeyInput.value)); if (value >= 1 && value <= 12 && select.value === hasteAction) setLastWaypointHasteHotkey(`F${value}`); });
       hasteHotkeyInput.__caveWaypointActionsKeyBound = true;
     }
     if (!select.__caveWaypointActionsHasteChangeBound) { select.addEventListener("change", syncHasteHotkeyVisibility); select.__caveWaypointActionsHasteChangeBound = true; }
