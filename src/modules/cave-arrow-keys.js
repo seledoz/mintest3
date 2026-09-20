@@ -347,7 +347,18 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     state.installed = false;
   }
 
-  bot.caveArrowKeys = { status, destroy, ensureDropdownOption: () => {} };
+  function stepToPosition(position) {
+    const from = normalizePosition(bot.getPlayerPosition?.());
+    const to = normalizePosition(position);
+    if (!from || !to || from.z !== to.z) return false;
+    if (sameTile(from, to)) return true;
+    if (Math.abs(from.x - to.x) + Math.abs(from.y - to.y) !== 1) return false;
+    const key = pickArrowKey(from, to);
+    if (!key) return false;
+    return clickDpadDirection(key, from, to, null);
+  }
+
+  bot.caveArrowKeys = { status, destroy, ensureDropdownOption: () => {}, stepToPosition };
   ensurePathfinderPatch();
   return bot.caveArrowKeys;
 };
