@@ -513,11 +513,17 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     ropeSpellState.lastRetryAt = now;
     ropeSpellState.armed = false;
     stopCurrentMovement();
-    bot.log("cave rope spell hotkey triggered", { index: index + 1, hotkey, position: playerPosition });
+    bot.log("cave rope spell hotkey triggered", {
+      index: index + 1,
+      hotkey,
+      position: playerPosition,
+    });
+
     const status = bot.cave?.status?.();
     if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
       bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
     }
+
     return true;
   }
 
