@@ -2,6 +2,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCaveWaypointActionsModule(bot) {
   const actionStorageKey = "minibiaBot.cave.waypointActions";
+  const hasteSpellStorageKey = "minibiaBot.cave.waypointHasteSpells";
   const ropeNamePattern = /\brope\b/i;
   const shovelNamePattern = /\bshovel\b/i;
   const shovelTargetNamePatterns = [
@@ -14,6 +15,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   const noopAction = "walk";
   const ropeAction = "rope";
   const ropeSpellAction = "ropeSpell";
+  const hasteAction = "haste";
   const shovelAction = "shovel";
   const ropeSpellText = "Exani Tera";
   const waitAction = "wait";
@@ -25,6 +27,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     index: -1,
     startZ: null,
     sentAt: 0,
+  };
+  const hasteState = {
+    lastCastKey: null,
   };
   const waitState = {
     active: false,
@@ -42,7 +47,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   }
 
   function normalizeAction(action) {
-    if (action === ropeAction || action === ropeSpellAction || action === shovelAction || action === waitAction) return action;
+    if (action === ropeAction || action === ropeSpellAction || action === hasteAction || action === shovelAction || action === waitAction) return action;
     return noopAction;
   }
 
@@ -78,6 +83,51 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const routeLength = bot.cave?.getRoute?.().length || 0;
     const actions = getPresetActions();
     return Array.from({ length: routeLength }, (_, index) => normalizeAction(actions[index]));
+  }
+
+  function readAllHasteSpells() {
+    const raw = bot.storage.get(hasteSpellStorageKey, {});
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  }
+
+  function getPresetHasteSpells(name = getActivePresetName()) {
+    const allSpells = readAllHasteSpells();
+    const spells = allSpells[normalizePresetName(name)];
+    return Array.isArray(spells) ? spells.slice() : [];
+  }
+
+  function savePresetHasteSpells(spells, name = getActivePresetName()) {
+    const allSpells = readAllHasteSpells();
+    const routeLength = bot.cave?.getRoute?.().length || 0;
+    allSpells[normalizePresetName(name)] = Array.from(
+      { length: routeLength },
+      (_, index) => String(spells[index] || "").trim()
+    );
+    bot.storage.set(hasteSpellStorageKey, allSpells);
+    return allSpells[normalizePresetName(name)].slice();
+  }
+
+  function getWaypointHasteSpells() {
+    const routeLength = bot.cave?.getRoute?.().length || 0;
+    const spells = getPresetHasteSpells();
+    return Array.from({ length: routeLength }, (_, index) => String(spells[index] || "").trim());
+  }
+
+  function setWaypointHasteSpell(index, spell) {
+    const routeLength = bot.cave?.getRoute?.().length || 0;
+    const normalizedIndex = Math.trunc(Number(index));
+    if (!Number.isFinite(normalizedIndex) || normalizedIndex < 0 || normalizedIndex >= routeLength) return null;
+
+    const spells = getWaypointHasteSpells();
+    spells[normalizedIndex] = String(spell || "").trim();
+    savePresetHasteSpells(spells);
+    bot.log("cave haste waypoint spell updated", { index: normalizedIndex + 1, spell: spells[normalizedIndex] });
+    return spells[normalizedIndex];
+  }
+
+  function setLastWaypointHasteSpell(spell) {
+    const routeLength = bot.cave?.getRoute?.().length || 0;
+    return routeLength ? setWaypointHasteSpell(routeLength - 1, spell) : null;
   }
 
   function setWaypointAction(index, action) {
@@ -327,6 +377,37 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     return true;
   }
 
+
+  function runHasteWaypoint(index, waypoint, playerPosition) {
+    if (!playerPosition || !waypoint) return false;
+    if (!isAtWaypoint(playerPosition, waypoint)) return false;
+
+    const castKey = `${getActivePresetName()}:${index}`;
+    if (hasteState.lastCastKey === castKey) return true;
+
+    const spell = getWaypointHasteSpells()[index];
+    if (!spell) {
+      bot.log("cave haste waypoint skipped: no spell entered", { index: index + 1 });
+      hasteState.lastCastKey = castKey;
+      return true;
+    }
+
+    const sent = bot.sendChat?.(spell);
+    if (!sent) {
+      bot.log("cave haste waypoint failed to send spell", { index: index + 1, spell });
+      return false;
+    }
+
+    hasteState.lastCastKey = castKey;
+    bot.log("cave haste waypoint cast", { index: index + 1, spell, position: playerPosition });
+
+    const status = bot.cave?.status?.();
+    if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
+      bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+    }
+    return true;
+  }
+
   function useRopeOnNearestHole(preferredPosition = null) {
     return useToolOnNearestTarget({
       action: ropeAction,
@@ -450,6 +531,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
     if (!waypoint || action === noopAction) return;
 
+    if (hasteState.lastCastKey) {
+      const currentHasteKey = `${getActivePresetName()}:${index}`;
+      if (currentHasteKey !== hasteState.lastCastKey) hasteState.lastCastKey = null;
+    }
+
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
     if (action !== ropeSpellAction && ropeSpellState.active && ropeSpellState.index === index) {
       ropeSpellState.active = false;
@@ -458,6 +544,10 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
     if (action === ropeSpellAction) {
       runRopeSpellWaypoint(index, waypoint, playerPosition);
+      return;
+    }
+    if (action === hasteAction) {
+      runHasteWaypoint(index, waypoint, playerPosition);
       return;
     }
     if (action === waitAction) {
@@ -597,6 +687,10 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       ropeSpellOption.value = ropeSpellAction;
       ropeSpellOption.textContent = "Rope Spell (Exani Tera)";
 
+      const hasteOption = document.createElement("option");
+      hasteOption.value = hasteAction;
+      hasteOption.textContent = "Haste Waypoint";
+
       const shovelOption = document.createElement("option");
       shovelOption.value = shovelAction;
       shovelOption.textContent = "Use Shovel";
@@ -608,6 +702,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       select.appendChild(walkOption);
       select.appendChild(ropeOption);
       select.appendChild(ropeSpellOption);
+      select.appendChild(hasteOption);
       select.appendChild(shovelOption);
       select.appendChild(waitOption);
       wrapper.appendChild(label);
@@ -615,11 +710,49 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
       recordButton.closest(".mb-row")?.insertAdjacentElement("afterend", wrapper);
 
+      const hasteSpellLabel = document.createElement("label");
+      hasteSpellLabel.className = "mb-field";
+      hasteSpellLabel.setAttribute("for", "minibia-bot-cave-haste-spell");
+
+      const hasteSpellText = document.createElement("span");
+      hasteSpellText.className = "mb-field-label";
+      hasteSpellText.textContent = "Haste Spell";
+
+      const hasteSpellInput = document.createElement("input");
+      hasteSpellInput.type = "text";
+      hasteSpellInput.id = "minibia-bot-cave-haste-spell";
+      hasteSpellInput.placeholder = "Enter spell, e.g. utani hur";
+      hasteSpellInput.autocomplete = "off";
+      hasteSpellLabel.appendChild(hasteSpellText);
+      hasteSpellLabel.appendChild(hasteSpellInput);
+      wrapper.insertAdjacentElement("afterend", hasteSpellLabel);
+
+      const syncHasteSpellVisibility = () => {
+        const isHaste = select.value === hasteAction;
+        hasteSpellLabel.style.display = isHaste ? "" : "none";
+        if (isHaste) {
+          const actions = getWaypointActions();
+          const index = Math.max(0, (bot.cave?.getRoute?.().length || 1) - 1);
+          hasteSpellInput.value = getWaypointHasteSpells()[index] || "";
+        }
+      };
+
+      select.addEventListener("change", syncHasteSpellVisibility);
+
       recordButton.addEventListener("click", () => {
         window.setTimeout(() => {
-          setLastWaypointAction(select.value);
+          const action = select.value;
+          setLastWaypointAction(action);
+          if (action === hasteAction) setLastWaypointHasteSpell(hasteSpellInput.value);
+          syncHasteSpellVisibility();
         }, 0);
       });
+
+      hasteSpellInput.addEventListener("change", () => {
+        if (select.value === hasteAction) setLastWaypointHasteSpell(hasteSpellInput.value);
+      });
+
+      syncHasteSpellVisibility();
     }
 
     if (!document.getElementById("minibia-bot-cave-record-wait")) {
@@ -654,6 +787,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   bot.cave.getWaypointActions = getWaypointActions;
   bot.cave.setWaypointAction = setWaypointAction;
   bot.cave.setLastWaypointAction = setLastWaypointAction;
+  bot.cave.getWaypointHasteSpells = getWaypointHasteSpells;
+  bot.cave.setWaypointHasteSpell = setWaypointHasteSpell;
+  bot.cave.setLastWaypointHasteSpell = setLastWaypointHasteSpell;
   bot.cave.useRopeOnNearestHole = useRopeOnNearestHole;
   bot.cave.isWaypointActionBlocking = (index) => getWaypointActions()[Math.trunc(Number(index) || 0)] === ropeSpellAction;
   bot.cave.useShovelOnNearestHole = useShovelOnNearestHole;
