@@ -356,8 +356,12 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     const key = pickArrowKey(from, to);
     if (!key) return false;
 
-    // Exact Rope Spell final steps must use a fresh D-pad lookup when the
-    // cached controls are stale or missing.
+    // Rope Spell's final step must always resolve the live D-pad. A cached
+    // button can remain connected while belonging to an old/replaced D-pad,
+    // causing button.click() to report success without moving the player.
+    // Clear the cache before every exact-tile step so the hole step targets
+    // the currently rendered controls.
+    state.dpadButtons = null;
     let stepped = clickDpadDirection(key, from, to, null);
     if (!stepped) {
       state.dpadButtons = null;
