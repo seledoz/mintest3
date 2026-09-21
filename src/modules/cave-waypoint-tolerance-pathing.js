@@ -282,7 +282,13 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const tolerance = Math.max(1, Number.isFinite(configuredTolerance) ? configuredTolerance : 1);
       const walkOverFields = !!caveStatus?.config?.walkOverFields;
       const isCurrentSameFloorWaypoint = from && to && waypoint && from.z === waypoint.z && to.x === waypoint.x && to.y === waypoint.y && to.z === waypoint.z;
-      if (isCurrentSameFloorWaypoint && !isExactActionTile(waypoint)) {
+      const currentIndex = Math.trunc(Number(caveStatus?.currentWaypointIndex ?? caveStatus?.currentIndex) || 0);
+      const currentAction = bot.cave?.getWaypointActions?.()[currentIndex];
+      // Rope Spell is always an exact-tile action. Do not apply waypoint
+      // tolerance even if the hole's item definition does not expose a
+      // floorchange/name property.
+      const isCurrentRopeSpell = currentAction === "ropeSpell";
+      if (isCurrentSameFloorWaypoint && !isCurrentRopeSpell && !isExactActionTile(waypoint)) {
         const toleranceTarget = findClosestWalkableToleranceTile(from, waypoint, tolerance, walkOverFields);
         if (toleranceTarget) return originalFindPath.call(this, fromValue, new Position(toleranceTarget.x, toleranceTarget.y, toleranceTarget.z), ...args);
       }
