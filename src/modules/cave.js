@@ -1031,6 +1031,42 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return true;
   }
 
+  function pathContainsFireField(path) {
+    if (!config.walkOverFields || !Array.isArray(path)) return false;
+    return path.some((position) => {
+      const tile = getTileAt(position);
+      return isFireFieldTileForCavePathing(tile);
+    });
+  }
+
+  function stepAlongWalkOverFieldPath(path, fromPos) {
+    if (!config.walkOverFields || !Array.isArray(path) || !fromPos) return false;
+    const next = path.find((position) => {
+      if (!position) return false;
+      return position.x !== fromPos.x || position.y !== fromPos.y || position.z !== fromPos.z;
+    });
+    if (!next) return false;
+
+    const nextPos = normalizePosition(next);
+    if (!nextPos || nextPos.z !== fromPos.z) return false;
+
+    // The native pathfinder can reject fire-field tiles even though CaveBot
+    // considers them walkable. When the route contains a fire field, follow
+    // the already-validated CaveBot A* route one tile at a time instead of
+    // handing the route back to the native collision/pathfinder.
+    const stepped = bot.caveArrowKeys?.stepToPosition?.(nextPos);
+    if (!stepped) return false;
+
+    state.lastPathAt = Date.now();
+    bot.logDebug("cave stepped along Walk Over Fields route", {
+      from: fromPos,
+      to: nextPos,
+      fireFieldRoute: true,
+      pathfinderMode: config.pathfinderMode,
+    });
+    return true;
+  }
+
   function goToWaypoint(waypoint) {
     patchFieldWalkabilityForCavePathing();
     patchRopeSpellWaypointWalkability(waypoint);
@@ -1052,6 +1088,15 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const path = findPathAStar(fromPos, waypointPos, requiresExactWaypoint ? 0 : null);
       if (path && path.length > 0) {
         const playerPos = fromPos;
+
+        // If Walk Over Fields is enabled and this route actually crosses a
+        // fire-field tile, do not give the route back to the native pathfinder.
+        // Follow the A* route one movement at a time so fire fields are
+        // treated like ordinary walkable tiles for the whole route.
+        if (pathContainsFireField(path) && stepAlongWalkOverFieldPath(path, playerPos)) {
+          return true;
+        }
+
         const waypointOnScreen = waypointPos && isOnScreen(waypointPos, playerPos);
         let targetTile = null;
         if (waypointOnScreen) targetTile = waypointPos;
@@ -1076,6 +1121,22 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     }
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
     const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
+
+    // Game/Direct/native modes normally delegate the whole route to the
+    // client pathfinder. When Walk Over Fields is enabled, build the same
+    // CaveBot A* route first. If any tile on that route is a fire field,
+    // follow that route one tile at a time so intermediate fire fields and
+    // a fire-field destination use the same walkability rules as A*.
+    if (config.walkOverFields) {
+      const fromForFieldPath = normalizePosition(from);
+      const waypointForFieldPath = normalizePosition(waypoint);
+      if (fromForFieldPath && waypointForFieldPath && fromForFieldPath.z === waypointForFieldPath.z) {
+        const fieldPath = findPathAStar(fromForFieldPath, waypointForFieldPath, waypointAction === "ropeSpell" ? 0 : null);
+        if (pathContainsFireField(fieldPath) && stepAlongWalkOverFieldPath(fieldPath, fromForFieldPath)) {
+          return true;
+        }
+      }
+    }
     const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
     const fromPos = normalizePosition(from);
     const waypointPos = normalizePosition(waypoint);
