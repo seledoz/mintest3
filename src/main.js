@@ -401,6 +401,9 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
     currentBundle.installCaveWaypointActionsModule?.(bot);
 
     bot.ui.inject();
+    bot.spellTimer?.ensureUi?.();
+    window.setTimeout(() => bot.spellTimer?.ensureUi?.(), 0);
+    window.setTimeout(() => bot.spellTimer?.ensureUi?.(), 250);
     const ensureCaveWaypointActionControls = () => {
       const caveSection = document.getElementById("minibia-bot-cave-add")?.closest(".mb-section");
       if (!caveSection) return false;
