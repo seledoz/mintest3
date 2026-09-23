@@ -194,12 +194,29 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
       section.appendChild(moduleBody);
     }
 
-    button.onclick = (event) => {
+    const toggleModule = (event) => {
       event.preventDefault();
       event.stopPropagation();
-      setModuleCollapsed(section, section.dataset.moduleCollapsed !== "true");
+      event.stopImmediatePropagation();
+      const nextCollapsed = section.dataset.moduleCollapsed !== "true";
+      const body = section.querySelector(":scope > .mb-module-body");
+      section.dataset.moduleCollapsed = nextCollapsed ? "true" : "false";
+      section.classList.toggle("mb-module-collapsed", nextCollapsed);
+      if (body) {
+        body.hidden = nextCollapsed;
+        body.style.display = nextCollapsed ? "none" : "block";
+      }
+      button.textContent = nextCollapsed ? "+" : "−";
+      button.setAttribute("aria-label", nextCollapsed ? "Expand module" : "Collapse module");
+      button.setAttribute("title", nextCollapsed ? "Expand module" : "Collapse module");
+      const state = getModuleCollapsedState();
+      state[section.dataset.moduleCollapseKey] = nextCollapsed;
+      bot.storage.set(moduleCollapsedStorageKey, state);
       return false;
     };
+    button.onclick = toggleModule;
+    button.ontouchend = toggleModule;
+    button.onmouseup = toggleModule;
     button.onpointerdown = (event) => {
       event.stopPropagation();
     };
