@@ -259,8 +259,9 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
       const githubSection = document.getElementById("minibia-bot-github-waypoints-section");
       if (!githubSection) return false;
       const gmModule = bot.gmDefaultChatKillSwitch;
-      if (typeof gmModule?.injectPanelControl === "function") {
-        gmModule.injectPanelControl();
+      if (typeof gmModule?.ensurePanelControls === "function") {
+        gmModule.ensurePanelControls();
+        gmModule.ensureUnknownMonsterControls?.();
         const section = document.getElementById("minibia-bot-gm-kill-switch-section");
         if (!section) return false;
         if (githubSection.nextElementSibling !== section) githubSection.insertAdjacentElement("afterend", section);
@@ -447,6 +448,16 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
     installLureCaveProgressPreserver(bot);
     currentBundle.installGithubWaypointLibraryModule?.(bot);
     installGmKillSwitchBelowGithub(bot);
+    window.setTimeout(() => {
+      bot.gmDefaultChatKillSwitch?.ensurePanelControls?.();
+      bot.gmDefaultChatKillSwitch?.ensureUnknownMonsterControls?.();
+      bot.spellTimer?.ensureUi?.();
+    }, 0);
+    window.setTimeout(() => {
+      bot.gmDefaultChatKillSwitch?.ensurePanelControls?.();
+      bot.gmDefaultChatKillSwitch?.ensureUnknownMonsterControls?.();
+      bot.spellTimer?.ensureUi?.();
+    }, 250);
     removePanelDebugSection();
     window.setTimeout(removePanelDebugSection, 0);
     bot.caveArrowKeys?.ensureDropdownOption?.();
