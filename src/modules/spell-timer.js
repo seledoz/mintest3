@@ -104,12 +104,13 @@ window.__minibiaBotBundle.installSpellTimerModule = function installSpellTimerMo
     if (hotkey && document.activeElement !== hotkey) hotkey.value = String(config.hotbarSlot);
   }
   function positionAfterGmMonsterResponder(section) {
+    const panel = document.getElementById("minibia-bot-panel");
     const responder = document.getElementById("minibia-bot-gm-unknown-monster-controls");
-    if (!section || !responder?.parentNode) return false;
+    if (!panel || !section || !responder || !panel.contains(responder)) return false;
     if (section.parentNode !== responder.parentNode || section.previousElementSibling !== responder) {
       responder.insertAdjacentElement("afterend", section);
     }
-    return true;
+    return panel.contains(section);
   }
 
   function installUi() {
@@ -127,10 +128,11 @@ window.__minibiaBotBundle.installSpellTimerModule = function installSpellTimerMo
         <label class="mb-field"><span class="mb-field-label">Hotkey</span><input type="number" id="minibia-bot-spell-timer-hotkey" min="1" max="12" step="1" /></label>
         <div class="mb-small-note">When the timer is due, nearby monsters block the hotkey until the area is clear. Monster guard: 4 tiles, same floor.</div>
       </div>`;
-    const anchor = document.getElementById("minibia-bot-gm-unknown-monster-controls")
-      || document.getElementById("minibia-bot-anti-paralyze-section");
-    if (anchor?.parentNode) anchor.insertAdjacentElement("afterend", section); else panel.appendChild(section);
-    positionAfterGmMonsterResponder(section);
+    const responder = document.getElementById("minibia-bot-gm-unknown-monster-controls");
+    if (!positionAfterGmMonsterResponder(section)) {
+      section.remove();
+      return false;
+    }
     section.querySelector("#minibia-bot-spell-timer-enabled")?.addEventListener("change", e => updateConfig({ enabled: e.target.checked }));
     section.querySelector("#minibia-bot-spell-timer-interval")?.addEventListener("change", e => updateConfig({ intervalSeconds: e.target.value }));
     section.querySelector("#minibia-bot-spell-timer-hotkey")?.addEventListener("change", e => updateConfig({ hotbarSlot: e.target.value }));
@@ -139,12 +141,14 @@ window.__minibiaBotBundle.installSpellTimerModule = function installSpellTimerMo
   let uiObserver = null;
   function ensureUi() {
     const installed = installUi();
-    const responderPresent = !!document.getElementById("minibia-bot-gm-unknown-monster-controls");
-    if (installed && responderPresent) { uiObserver?.disconnect(); uiObserver = null; return true; }
+    const responder = document.getElementById("minibia-bot-gm-unknown-monster-controls");
+    const ready = installed && !!responder && document.getElementById("minibia-bot-panel")?.contains(responder);
+    if (ready) { uiObserver?.disconnect(); uiObserver = null; return true; }
     if (!uiObserver) {
       uiObserver = new MutationObserver(() => {
-        const ready = installUi() && !!document.getElementById("minibia-bot-gm-unknown-monster-controls");
-        if (ready) { uiObserver.disconnect(); uiObserver = null; }
+        const nextResponder = document.getElementById("minibia-bot-gm-unknown-monster-controls");
+        const nextReady = installUi() && !!nextResponder && document.getElementById("minibia-bot-panel")?.contains(nextResponder);
+        if (nextReady) { uiObserver.disconnect(); uiObserver = null; }
       });
       (document.documentElement || document.body)?.appendChild ? uiObserver.observe(document.documentElement || document.body, { childList: true, subtree: true }) : null;
     }
