@@ -169,12 +169,6 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     title.style.justifyContent = "space-between";
     title.style.gap = "6px";
     title.appendChild(button);
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const nextCollapsed = section.dataset.moduleCollapsed !== "true";
-      setModuleCollapsed(section, nextCollapsed);
-    });
     const saved = !!getModuleCollapsedState()[section.dataset.moduleCollapseKey];
     setModuleCollapsed(section, saved);
   }
@@ -201,7 +195,20 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     ensureAllModuleCollapseControls(panel);
     const moduleCollapseObserver = new MutationObserver(() => ensureAllModuleCollapseControls(panel));
     moduleCollapseObserver.observe(panel, { childList: true, subtree: true });
-    bot.addCleanup(() => moduleCollapseObserver.disconnect());
+    const moduleCollapseClickHandler = (event) => {
+      const button = event.target?.closest?.(".mb-module-collapse");
+      if (!button || !panel.contains(button)) return;
+      const section = button.closest(".mb-section");
+      if (!section) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setModuleCollapsed(section, section.dataset.moduleCollapsed !== "true");
+    };
+    panel.addEventListener("click", moduleCollapseClickHandler, true);
+    bot.addCleanup(() => {
+      moduleCollapseObserver.disconnect();
+      panel.removeEventListener("click", moduleCollapseClickHandler, true);
+    });
     applySavedPanelPosition(panel); setPanelCollapsed(panel, getSavedPanelCollapsed()); enableDrag(panel);
 
     const q = (id) => panel.querySelector(id);
