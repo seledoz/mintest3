@@ -132,7 +132,14 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
 
   function setModuleCollapsed(section, collapsed) {
     if (!section) return;
-    const bodyChildren = Array.from(section.children).filter((child) => !child.classList.contains("mb-module-title"));
+    const body = section.querySelector(":scope > .mb-module-body");
+    if (body) {
+      body.hidden = !!collapsed;
+      body.style.setProperty("display", collapsed ? "none" : "", "important");
+    }
+    const bodyChildren = body
+      ? []
+      : Array.from(section.children).filter((child) => !child.classList.contains("mb-module-title"));
     const title = section.querySelector(".mb-module-title");
     const button = section.querySelector(".mb-module-collapse");
     const key = section.dataset.moduleCollapseKey || section.id || title?.textContent?.replace(/[+−]$/, "").trim();
@@ -173,6 +180,16 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     title.style.justifyContent = "space-between";
     title.style.gap = "6px";
     title.appendChild(button);
+
+    const existingBody = section.querySelector(":scope > .mb-module-body");
+    if (!existingBody) {
+      const moduleBody = document.createElement("div");
+      moduleBody.className = "mb-module-body";
+      const children = Array.from(section.children).filter((child) => child !== title);
+      children.forEach((child) => moduleBody.appendChild(child));
+      section.appendChild(moduleBody);
+    }
+
     button.onclick = (event) => {
       event.preventDefault();
       event.stopPropagation();
