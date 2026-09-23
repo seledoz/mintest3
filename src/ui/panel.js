@@ -208,7 +208,16 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
 
   function ensureAllModuleCollapseControls(panel) {
     if (!panel) return;
-    panel.querySelectorAll(".mb-section").forEach(ensureModuleCollapseControl);
+    panel.querySelectorAll(".mb-section").forEach((section) => {
+      ensureModuleCollapseControl(section);
+      if (section.dataset.moduleCollapsed === "true") {
+        const body = section.querySelector(":scope > .mb-module-body");
+        if (body) {
+          body.hidden = true;
+          body.style.setProperty("display", "none", "important");
+        }
+      }
+    });
   }
 
   function setPanelCollapsed(panel, collapsed) {
