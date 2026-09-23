@@ -135,11 +135,11 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     const bodyChildren = Array.from(section.children).filter((child) => !child.classList.contains("mb-module-title"));
     const title = section.querySelector(".mb-module-title");
     const button = section.querySelector(".mb-module-collapse");
-    const key = section.id || title?.textContent?.trim();
+    const key = section.dataset.moduleCollapseKey || section.id || title?.textContent?.replace(/[+−]$/, "").trim();
     if (!key) return;
     const nextCollapsed = !!collapsed;
     section.dataset.moduleCollapsed = nextCollapsed ? "true" : "false";
-    bodyChildren.forEach((child) => { child.hidden = nextCollapsed; });
+    bodyChildren.forEach((child) => { child.hidden = nextCollapsed; child.style.display = nextCollapsed ? "none" : ""; });
     if (button) {
       button.textContent = nextCollapsed ? "+" : "−";
       button.setAttribute("aria-label", nextCollapsed ? "Expand module" : "Collapse module");
@@ -156,6 +156,7 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     const title = section.querySelector(":scope > .mb-label, :scope > .mb-section-title");
     if (!title) return;
     section.dataset.moduleCollapseReady = "1";
+    section.dataset.moduleCollapseKey = section.id || title.textContent.trim();
     title.classList.add("mb-module-title");
     const button = document.createElement("button");
     button.type = "button";
@@ -170,10 +171,11 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     title.appendChild(button);
     button.addEventListener("click", (event) => {
       event.preventDefault();
-      event.stopPropagation();
-      setModuleCollapsed(section, section.dataset.moduleCollapsed !== "true");
+      event.stopImmediatePropagation();
+      const nextCollapsed = section.dataset.moduleCollapsed !== "true";
+      setModuleCollapsed(section, nextCollapsed);
     });
-    const saved = !!getModuleCollapsedState()[section.id || title.textContent.trim()];
+    const saved = !!getModuleCollapsedState()[section.dataset.moduleCollapseKey];
     setModuleCollapsed(section, saved);
   }
 
