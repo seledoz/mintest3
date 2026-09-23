@@ -39,7 +39,6 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
     return playerState ? { hp: { current: Number(playerState.health ?? 0), max: Number(playerState.maxHealth ?? 0) }, mana: { current: Number(playerState.mana ?? 0), max: Number(playerState.maxMana ?? 0) } } : { hp: null, mana: null };
   }
   function normalizeHotbarSlot(slot) { const value = Number(slot); if (!Number.isFinite(value)) return null; const normalized = Math.trunc(value); return normalized < 1 || normalized > 12 ? null : normalized; }
-  function hasPendingAttempt() { return !!(state.pendingHpAttempt || state.pendingManaAttempt); }
   function didHpHealSucceed(stats, attempt) { return !!stats?.hp && !!attempt && stats.hp.current > attempt.hpBefore; }
   function didManaHealSucceed(stats, attempt) { return !!stats?.mana && !!attempt && stats.mana.current > attempt.manaBefore; }
   function resolvePendingAttempts(stats, now = Date.now()) {
@@ -59,7 +58,7 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
     return hp.current > 0 && hp.current <= Math.max(0, Number(config.minHp) || 0) && now - state.lastHpHealAt >= config.healCooldownMs && now - state.lastHpAttemptAt >= Math.max(50, Number(config.healRetryMs) || 0);
   }
   function canUseManaHeal(now = Date.now(), stats = readStats()) {
-    const { mana } = stats; const slot = normalizeHotbarSlot(config.manaHotbarSlot); if (!mana || !slot || state.pendingManaAttempt || state.pendingHpAttempt) return false;
+    const { mana } = stats; const slot = normalizeHotbarSlot(config.manaHotbarSlot); if (!mana || !slot || state.pendingManaAttempt) return false;
     return mana.current <= Math.max(0, Number(config.minMana) || 0) && now - state.lastManaHealAt >= config.manaCooldownMs && now - state.lastManaAttemptAt >= Math.max(50, Number(config.healRetryMs) || 0);
   }
   function triggerHpHeal(now = Date.now(), stats = readStats()) {
@@ -76,7 +75,10 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
   }
   function tryHeal() {
     if (!config.enabled) return false;
-    const now = Date.now(); const stats = readStats(); resolvePendingAttempts(stats, now); if (hasPendingAttempt()) return false; if (triggerHpHeal(now, stats)) return true; return triggerManaHeal(now, stats);
+    const now = Date.now(); const stats = readStats(); resolvePendingAttempts(stats, now);
+    const hpTriggered = triggerHpHeal(now, stats);
+    const manaTriggered = triggerManaHeal(now, stats);
+    return hpTriggered || manaTriggered;
   }
   function scheduleNextTick() { if (!state.running) return; state.timerId = window.setTimeout(() => { tick(); }, config.tickMs); }
   function tick() { if (!state.running) return; try { tryHeal(); } catch (error) { bot.log("auto heal tick failed", error?.message || error); } finally { scheduleNextTick(); } }
