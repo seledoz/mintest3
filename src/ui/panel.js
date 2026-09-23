@@ -238,6 +238,16 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     ensureAllModuleCollapseControls(panel);
     const moduleCollapseObserver = new MutationObserver(() => ensureAllModuleCollapseControls(panel));
     moduleCollapseObserver.observe(panel, { childList: true, subtree: true });
+    panel.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target.closest(".mb-module-collapse") : null;
+      if (!target || !panel.contains(target)) return;
+      const section = target.closest(".mb-section");
+      if (!section) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setModuleCollapsed(section, section.dataset.moduleCollapsed !== "true");
+    }, true);
+
     panel.querySelectorAll(".mb-module-collapse").forEach((button) => {
       if (button.dataset.moduleCollapseBound === "1") return;
       button.dataset.moduleCollapseBound = "1";
