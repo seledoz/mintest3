@@ -195,19 +195,29 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     ensureAllModuleCollapseControls(panel);
     const moduleCollapseObserver = new MutationObserver(() => ensureAllModuleCollapseControls(panel));
     moduleCollapseObserver.observe(panel, { childList: true, subtree: true });
-    const moduleCollapseClickHandler = (event) => {
-      const button = event.target?.closest?.(".mb-module-collapse");
-      if (!button || !panel.contains(button)) return;
-      const section = button.closest(".mb-section");
-      if (!section) return;
-      event.preventDefault();
-      event.stopPropagation();
-      setModuleCollapsed(section, section.dataset.moduleCollapsed !== "true");
-    };
-    panel.addEventListener("click", moduleCollapseClickHandler, true);
+    panel.querySelectorAll(".mb-module-collapse").forEach((button) => {
+      if (button.dataset.moduleCollapseBound === "1") return;
+      button.dataset.moduleCollapseBound = "1";
+      button.style.pointerEvents = "auto";
+      button.style.cursor = "pointer";
+      button.style.position = "relative";
+      button.style.zIndex = "10";
+      button.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+      button.addEventListener("mousedown", (event) => {
+        event.stopPropagation();
+      });
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const section = button.closest(".mb-section");
+        if (!section) return;
+        setModuleCollapsed(section, section.dataset.moduleCollapsed !== "true");
+      });
+    });
     bot.addCleanup(() => {
       moduleCollapseObserver.disconnect();
-      panel.removeEventListener("click", moduleCollapseClickHandler, true);
     });
     applySavedPanelPosition(panel); setPanelCollapsed(panel, getSavedPanelCollapsed()); enableDrag(panel);
 
