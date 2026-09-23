@@ -169,6 +169,18 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     title.style.justifyContent = "space-between";
     title.style.gap = "6px";
     title.appendChild(button);
+    button.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setModuleCollapsed(section, section.dataset.moduleCollapsed !== "true");
+      return false;
+    };
+    button.onpointerdown = (event) => {
+      event.stopPropagation();
+    };
+    button.onmousedown = (event) => {
+      event.stopPropagation();
+    };
     const saved = !!getModuleCollapsedState()[section.dataset.moduleCollapseKey];
     setModuleCollapsed(section, saved);
   }
