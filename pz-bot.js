@@ -11,6 +11,7 @@
     "src/modules/gm-default-chat-kill-switch.js",
     "src/modules/rune.js",
     "src/modules/heal.js",
+    "src/modules/spell-timer.js",
     "src/modules/anti-paralyze.js",
     "src/modules/haste-paralyze-monster-range-guard.js",
     "src/modules/damage-tts-alert.js",
@@ -127,9 +128,65 @@
   function addSafeUiPerformanceOptimizations(code,path){
     if(path==="src/core.js")code=code.replace("  startReconnectWatcher();","  // Reconnect watcher temporarily disabled for FPS testing.");
     if(path==="src/modules/auto-attack.js")code=code.replace("      maxTargetDistanceX: 7,","      maxTargetDistanceX: 5,").replace("    return dx <= maxTargetDistanceX && dy <= maxTargetDistanceY;","    return dx <= Math.min(5, maxTargetDistanceX) && dy <= Math.min(5, maxTargetDistanceY) && Math.max(dx, dy) <= 5;");
-    if(path==="src/modules/cave.js")code=code.replace(`        if (config.pathfinderMode === 'astar') {\n          const target = bot.attack?.getCurrentTarget?.() || null;\n          if (target) {\n            const chaseResult = chaseTarget(target);\n            bot.logDebug("cave combat chase", { chasing: chaseResult, targetId: target.id, targetName: target.name || "Mob", targetPos: normalizePosition(target.getPosition?.() || target.__position) });\n          } else bot.logDebug("cave combat no target to chase");\n        }\n`,"");
-    if(path==="src/modules/lure-mode.js"){code=code.replace("    nextMode2StepAt: 0,\n","    nextMode2StepAt: 0,\n    mode2StepStartPosition: null,\n    mode2WaitingForStep: false,\n").replace(`      if (status.mode === 2 && status.luring) {\n        state.nextMode2StepAt = Date.now() + status.stepDelayMs;\n        return limitPathToOneStep(path);\n      }`,`      if (status.mode === 2 && status.luring) {\n        const startPosition = playerPos();\n        state.mode2StepStartPosition = startPosition;\n        state.mode2WaitingForStep = !!startPosition;\n        return limitPathToOneStep(path);\n      }`).replace(`    state.lastStatus = status;\n\n    if (state.clearingPack`,`    state.lastStatus = status;\n\n    if (status.mode === 2 && status.luring && state.mode2WaitingForStep) {\n      const currentPosition = playerPos();\n      const startPosition = state.mode2StepStartPosition;\n      if (currentPosition && startPosition && dist(currentPosition, startPosition) >= 1) {\n        stopCurrentPath();\n        state.nextMode2StepAt = Date.now() + status.stepDelayMs;\n        state.mode2WaitingForStep = false;\n        state.mode2StepStartPosition = null;\n        status = getLureStatus();\n        state.lastStatus = status;\n        bot.log?.("lure mode 2 completed paced step", { stepDelayMs: status.stepDelayMs, nextStepAt: state.nextMode2StepAt, farthestDistance: status.farthestDistance, maxDistance: status.maxDistance });\n      }\n    }\n\n    if (state.clearingPack`).replace(`    state.nextMode2StepAt = 0;\n    patchPathfinder();`,`    state.nextMode2StepAt = 0;\n    state.mode2StepStartPosition = null;\n    state.mode2WaitingForStep = false;\n    patchPathfinder();`).replace(`    state.nextMode2StepAt = 0;\n    state.lastStatus = getOffStatus();`,`    state.nextMode2StepAt = 0;\n    state.mode2StepStartPosition = null;\n    state.mode2WaitingForStep = false;\n    state.lastStatus = getOffStatus();`).replace(`      state.nextMode2StepAt = 0;\n    }`,`      state.nextMode2StepAt = 0;\n      state.mode2StepStartPosition = null;\n      state.mode2WaitingForStep = false;\n    }`);}
-    if(path==="src/ui/panel.js"){code=code.replace(`  function refreshVisibleCreatures() {\n    const list = document.getElementById("minibia-bot-visible-creatures-list");\n    if (!list) return;`,`  function refreshVisibleCreatures() {\n    const list = document.getElementById("minibia-bot-visible-creatures-list");\n    if (!list || isPanelCollapsed()) return;`).replace(`    const visibleCreaturesTimerId = window.setInterval(refreshVisibleCreatures, 1000);`,`    const visibleCreaturesTimerId = window.setInterval(() => {\n      if (!isPanelCollapsed()) refreshVisibleCreatures();\n    }, 1000);`).replace(`    const talkStatusTimerId = window.setInterval(refreshTalkStatus, 1000);`,`    const talkStatusTimerId = window.setInterval(() => {\n      if (!isPanelCollapsed()) refreshTalkStatus();\n    }, 1000);`).replace(`    const caveStatusTimerId = window.setInterval(() => {\n      refreshCaveStatus();`,`    const caveStatusTimerId = window.setInterval(() => {\n      if (isPanelCollapsed()) return;\n      refreshCaveStatus();`)}
+    if(path==="src/modules/cave.js")code=code.replace(`        if (config.pathfinderMode === 'astar') {
+          const target = bot.attack?.getCurrentTarget?.() || null;
+          if (target) {
+            const chaseResult = chaseTarget(target);
+            bot.logDebug("cave combat chase", { chasing: chaseResult, targetId: target.id, targetName: target.name || "Mob", targetPos: normalizePosition(target.getPosition?.() || target.__position) });
+          } else bot.logDebug("cave combat no target to chase");
+        }
+`,"");
+    if(path==="src/modules/lure-mode.js"){code=code.replace("    nextMode2StepAt: 0,\n","    nextMode2StepAt: 0,\n    mode2StepStartPosition: null,\n    mode2WaitingForStep: false,\n").replace(`      if (status.mode === 2 && status.luring) {
+        state.nextMode2StepAt = Date.now() + status.stepDelayMs;
+        return limitPathToOneStep(path);
+      }`,`      if (status.mode === 2 && status.luring) {
+        const startPosition = playerPos();
+        state.mode2StepStartPosition = startPosition;
+        state.mode2WaitingForStep = !!startPosition;
+        return limitPathToOneStep(path);
+      }`).replace(`    state.lastStatus = status;
+
+    if (state.clearingPack`,`    state.lastStatus = status;
+
+    if (status.mode === 2 && status.luring && state.mode2WaitingForStep) {
+      const currentPosition = playerPos();
+      const startPosition = state.mode2StepStartPosition;
+      if (currentPosition && startPosition && dist(currentPosition, startPosition) >= 1) {
+        stopCurrentPath();
+        state.nextMode2StepAt = Date.now() + status.stepDelayMs;
+        state.mode2WaitingForStep = false;
+        state.mode2StepStartPosition = null;
+        status = getLureStatus();
+        state.lastStatus = status;
+        bot.log?.("lure mode 2 completed paced step", { stepDelayMs: status.stepDelayMs, nextStepAt: state.nextMode2StepAt, farthestDistance: status.farthestDistance, maxDistance: status.maxDistance });
+      }
+    }
+
+    if (state.clearingPack`).replace(`    state.nextMode2StepAt = 0;
+    patchPathfinder();`,`    state.nextMode2StepAt = 0;
+    state.mode2StepStartPosition = null;
+    state.mode2WaitingForStep = false;
+    patchPathfinder();`).replace(`    state.nextMode2StepAt = 0;
+    state.lastStatus = getOffStatus();`,`    state.nextMode2StepAt = 0;
+    state.mode2StepStartPosition = null;
+    state.mode2WaitingForStep = false;
+    state.lastStatus = getOffStatus();`).replace(`      state.nextMode2StepAt = 0;
+    }`,`      state.nextMode2StepAt = 0;
+      state.mode2StepStartPosition = null;
+      state.mode2WaitingForStep = false;
+    }`);}
+    if(path==="src/ui/panel.js"){code=code.replace(`  function refreshVisibleCreatures() {
+    const list = document.getElementById("minibia-bot-visible-creatures-list");
+    if (!list) return;`,`  function refreshVisibleCreatures() {
+    const list = document.getElementById("minibia-bot-visible-creatures-list");
+    if (!list || isPanelCollapsed()) return;`).replace(`    const visibleCreaturesTimerId = window.setInterval(refreshVisibleCreatures, 1000);`,`    const visibleCreaturesTimerId = window.setInterval(() => {
+      if (!isPanelCollapsed()) refreshVisibleCreatures();
+    }, 1000);`).replace(`    const talkStatusTimerId = window.setInterval(refreshTalkStatus, 1000);`,`    const talkStatusTimerId = window.setInterval(() => {
+      if (!isPanelCollapsed()) refreshTalkStatus();
+    }, 1000);`).replace(`    const caveStatusTimerId = window.setInterval(() => {
+      refreshCaveStatus();`,`    const caveStatusTimerId = window.setInterval(() => {
+      if (isPanelCollapsed()) return;
+      refreshCaveStatus();`)}
     return code;
   }
   function ensureCavebotWaypointActionPanel(){
