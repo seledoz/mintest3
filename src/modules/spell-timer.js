@@ -117,7 +117,8 @@ window.__minibiaBotBundle.installSpellTimerModule = function installSpellTimerMo
         <label class="mb-field"><span class="mb-field-label">Hotkey</span><input type="number" id="minibia-bot-spell-timer-hotkey" min="1" max="12" step="1" /></label>
         <div class="mb-small-note">When the timer is due, nearby monsters block the hotkey until the area is clear. Monster guard: 4 tiles, same floor.</div>
       </div>`;
-    const anchor = document.getElementById("minibia-bot-anti-paralyze-section");
+    const anchor = document.getElementById("minibia-bot-gm-unknown-monster-controls")
+      || document.getElementById("minibia-bot-anti-paralyze-section");
     if (anchor?.parentNode) anchor.insertAdjacentElement("afterend", section); else panel.appendChild(section);
     section.querySelector("#minibia-bot-spell-timer-enabled")?.addEventListener("change", e => updateConfig({ enabled: e.target.checked }));
     section.querySelector("#minibia-bot-spell-timer-interval")?.addEventListener("change", e => updateConfig({ intervalSeconds: e.target.value }));
