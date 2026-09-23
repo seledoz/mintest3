@@ -103,8 +103,18 @@ window.__minibiaBotBundle.installSpellTimerModule = function installSpellTimerMo
     if (interval && document.activeElement !== interval) interval.value = String(config.intervalSeconds);
     if (hotkey && document.activeElement !== hotkey) hotkey.value = String(config.hotbarSlot);
   }
+  function positionAfterGmMonsterResponder(section) {
+    const responder = document.getElementById("minibia-bot-gm-unknown-monster-controls");
+    if (!section || !responder?.parentNode) return false;
+    if (section.parentNode !== responder.parentNode || section.previousElementSibling !== responder) {
+      responder.insertAdjacentElement("afterend", section);
+    }
+    return true;
+  }
+
   function installUi() {
-    if (document.getElementById(SECTION_ID)) { syncUi(); return true; }
+    const existing = document.getElementById(SECTION_ID);
+    if (existing) { positionAfterGmMonsterResponder(existing); syncUi(); return true; }
     const panel = document.getElementById("minibia-bot-panel");
     if (!panel) return false;
     const section = document.createElement("section");
@@ -120,6 +130,7 @@ window.__minibiaBotBundle.installSpellTimerModule = function installSpellTimerMo
     const anchor = document.getElementById("minibia-bot-gm-unknown-monster-controls")
       || document.getElementById("minibia-bot-anti-paralyze-section");
     if (anchor?.parentNode) anchor.insertAdjacentElement("afterend", section); else panel.appendChild(section);
+    positionAfterGmMonsterResponder(section);
     section.querySelector("#minibia-bot-spell-timer-enabled")?.addEventListener("change", e => updateConfig({ enabled: e.target.checked }));
     section.querySelector("#minibia-bot-spell-timer-interval")?.addEventListener("change", e => updateConfig({ intervalSeconds: e.target.value }));
     section.querySelector("#minibia-bot-spell-timer-hotkey")?.addEventListener("change", e => updateConfig({ hotbarSlot: e.target.value }));
@@ -127,10 +138,13 @@ window.__minibiaBotBundle.installSpellTimerModule = function installSpellTimerMo
   }
   let uiObserver = null;
   function ensureUi() {
-    if (installUi()) { uiObserver?.disconnect(); uiObserver = null; return true; }
+    const installed = installUi();
+    const responderPresent = !!document.getElementById("minibia-bot-gm-unknown-monster-controls");
+    if (installed && responderPresent) { uiObserver?.disconnect(); uiObserver = null; return true; }
     if (!uiObserver) {
       uiObserver = new MutationObserver(() => {
-        if (installUi()) { uiObserver.disconnect(); uiObserver = null; }
+        const ready = installUi() && !!document.getElementById("minibia-bot-gm-unknown-monster-controls");
+        if (ready) { uiObserver.disconnect(); uiObserver = null; }
       });
       (document.documentElement || document.body)?.appendChild ? uiObserver.observe(document.documentElement || document.body, { childList: true, subtree: true }) : null;
     }
