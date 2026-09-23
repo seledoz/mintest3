@@ -375,6 +375,7 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
     currentBundle.installRuneModule(bot);
     currentBundle.installHealModule(bot);
     currentBundle.installAntiParalyzeModule?.(bot);
+    currentBundle.installSpellTimerModule?.(bot);
     currentBundle.installHasteParalyzeMonsterRangeGuard?.(bot);
     currentBundle.installDamageTtsAlertModule?.(bot);
     currentBundle.installAutoInvisibleModule(bot);
@@ -463,6 +464,7 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
       runeV3: bot.runeV3?.status?.() || null,
       heal: bot.heal.status(),
       antiParalyze: bot.antiParalyze?.status?.() || null,
+      spellTimer: bot.spellTimer?.status?.() || null,
       damageTtsAlert: bot.damageTtsAlert?.status?.() || null,
       invisible: bot.invisible.status(),
       magicShield: bot.magicShield.status(),
