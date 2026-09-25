@@ -219,7 +219,7 @@
     }
   }
   async function loadSourceFile(path){
-    const sourceBaseUrl = path === "src/modules/cave-waypoint-actions.js" ? "https://cdn.jsdelivr.net/gh/seledoz/mintest3@2f0938a7c745bd819fa22aa008d50628a2472e49" : rawBaseUrl;
+    const sourceBaseUrl = path === "src/modules/cave-waypoint-actions.js" ? "https://cdn.jsdelivr.net/gh/seledoz/mintest3@636548ec997807292feaa297bee169e18da9a04c" : rawBaseUrl;
     const url=`${sourceBaseUrl}/${path}?t=${Date.now()}-${Math.random()}`;
     const response=await fetch(url,{cache:"no-store"});
     if(!response.ok)throw new Error(`Failed to load ${path}: HTTP ${response.status}`);
