@@ -871,8 +871,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       return;
     }
     if (action === useAction) {
-      runUseWaypoint(index, waypoint, playerPosition);
-      return;
+      // Return the handler result so Cavebot's main tick knows the Use
+      // waypoint is actively blocking normal waypoint movement.
+      return runUseWaypoint(index, waypoint, playerPosition);
     }
 
     const distance = distanceOnSameFloor(playerPosition, waypoint);
