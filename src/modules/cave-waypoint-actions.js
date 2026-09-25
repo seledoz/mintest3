@@ -598,8 +598,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       // breaks ping-pong routes when an action advances while travelling
       // backwards. Preserve the Cavebot's current travel direction.
       const direction = Number(status.direction) || 1;
-      bot.cave?.setCurrentIndex?.(nextIndex);
-      bot.cave?.setDirection?.(direction);
+      bot.cave?.setCurrentIndex?.(nextIndex, direction);
     }
     return true;
   }
