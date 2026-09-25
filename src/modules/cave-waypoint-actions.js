@@ -594,25 +594,30 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     if (now - lastToolUseAt < 250) return false;
 
     const mouse = window.gameClient?.mouse;
+    const targetRef = { which: targetTile, index: 0xFF };
     let sent = false;
 
-    // Use the same low-level item-use path already used successfully by
-    // rope/shovel actions. Prefer the client's public mouse.use API when it
-    // exists, but only consider the action successful when an actual handler
-    // is available.
-    if (typeof mouse?.use === "function") {
-      mouse.use({ which: targetTile, index: 0xFF });
-      sent = true;
-    } else if (typeof mouse?.__handleItemUseWith === "function") {
-      mouse.__handleItemUseWith(
-        { which: targetTile, index: 0xFF },
-        { which: targetTile, index: 0xFF }
-      );
-      sent = true;
+    // Plain "Use" is a one-target action: there is no source item. The
+    // client's internal handler expects the source argument to be null and
+    // the target tile as the second argument. This is different from rope /
+    // shovel, which pass an inventory item as the source.
+    if (typeof mouse?.__handleItemUseWith === "function") {
+      try {
+        mouse.__handleItemUseWith(null, targetRef);
+        sent = true;
+      } catch (_) {}
+    }
+
+    // Fallback for clients exposing the public mouse.use helper.
+    if (!sent && typeof mouse?.use === "function") {
+      try {
+        mouse.use(targetRef);
+        sent = true;
+      } catch (_) {}
     }
 
     if (!sent) {
-      bot.log("cave Use waypoint failed: no tile-use handler available", {
+      bot.log("cave Use waypoint failed: no compatible tile-use handler available", {
         direction: normalizedDirection,
         target: targetPosition,
       });
