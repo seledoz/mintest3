@@ -186,7 +186,7 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     const destinationField = !!getDamagingFieldName(destinationTile);
     matrix.set(`${to.x},${to.y}`, { passable: destinationField && isWalkOverFieldsEnabled() ? true : !!matrix.get(`${to.x},${to.y}`)?.passable, field: destinationField });
 
-    const tolerance = destinationField && isWalkOverFieldsEnabled() ? 0 : Math.max(1, Number(bot.cave?.status?.()?.config?.waypointTolerance) || 0);
+    const tolerance = 0;
     const open = [{ ...from, g: 0, f: heuristic(from, to), parent: null }];
     const closed = new Set();
     const key = (p) => `${p.x},${p.y}`;
