@@ -34,7 +34,6 @@
     "src/modules/mining.js",
     "src/modules/red-text-alert.js",
     "src/modules/cave.js",
-    "src/modules/cave-waypoint-tolerance-pathing.js",
     "src/modules/cave-walk-over-fields-global.js",
     "src/modules/cave-forward-loop.js",
     "src/modules/cave-arrow-keys.js",
