@@ -346,10 +346,14 @@ window.__minibiaBotBundle.createBot = function createBot() {
       logBuffer.push({ at: now, time, position: pos, text, data, level });
       if (logBuffer.length > MAX_LOG_ENTRIES) logBuffer.shift();
 
+      // Debug logging can be extremely frequent (combat/cavebot loops). Keep the
+      // entries in the in-memory trace buffer, but do not stringify and print
+      // every debug object to the browser console. Console I/O can tank game FPS.
+      if (level === "debug") return;
+
       const posStr = pos ? `[${pos.x},${pos.y},${pos.z}] ` : "";
-      const label = level === "debug" ? "[DEBUG] " : "";
       const rest = args.map((a) => typeof a === "object" ? JSON.stringify(a) : String(a)).join(" ");
-      console.log(`[minibia-bot] ${label}${posStr}${rest}`);
+      console.log(`[minibia-bot] ${posStr}${rest}`);
     },
     log(...args) {
       this.pushLogEntry("info", args);
