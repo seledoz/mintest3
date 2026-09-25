@@ -58,6 +58,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     startedAt: 0,
     useAt: 0,
     resumeAt: 0,
+    usedFromPositionKey: null,
   };
 
   function normalizePresetName(value) {
@@ -705,19 +706,33 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
         useWaypointState.phase = "settleAfterUse";
         useWaypointState.useAt = now;
         useWaypointState.resumeAt = now + USE_WAYPOINT_SETTLE_MS;
+        useWaypointState.usedFromPositionKey = getPositionKey(playerPosition);
         stopCurrentMovement();
-        bot.log("cave Use waypoint directional use sent; settling before continue", { index: index + 1, direction, delayMs: USE_WAYPOINT_SETTLE_MS });
+        bot.log("cave Use waypoint directional use sent; waiting for door/floor movement before continuing", { index: index + 1, direction, delayMs: USE_WAYPOINT_SETTLE_MS });
       }
       return true;
     }
 
     if (useWaypointState.phase === "settleAfterUse") {
+      // A level door can physically move the player after the use packet is
+      // sent. Do not advance and let Cavebot walk back onto the door while
+      // the player is still on the original waypoint. Wait until the game
+      // reports that the player actually moved away (or changed floors).
       if (now - useWaypointState.useAt < USE_WAYPOINT_SETTLE_MS) return true;
+
+      const currentPositionKey = getPositionKey(playerPosition);
+      const movedFromUseTile = currentPositionKey !== useWaypointState.usedFromPositionKey;
+      if (!movedFromUseTile) {
+        // Keep the Use waypoint blocking movement so it cannot be triggered
+        // repeatedly while the level door animation/server movement settles.
+        return true;
+      }
+
       const status = bot.cave?.status?.();
       if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
         bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
       }
-      bot.log("cave Use waypoint complete; continuing route", { index: index + 1, direction });
+      bot.log("cave Use waypoint complete; player moved after use, continuing route", { index: index + 1, direction, from: useWaypointState.usedFromPositionKey, to: currentPositionKey });
       resetUseWaypointState();
       return true;
     }
