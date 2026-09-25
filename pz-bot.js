@@ -218,7 +218,31 @@
       window.__minibiaCaveWaypointPanelInterval=window.setInterval(()=>{ensureCavebotWaypointActionPanel();},250);
     }
   }
-  async function loadSourceFile(path){const url=`${rawBaseUrl}/${path}?t=${Date.now()}`;const response=await fetch(url,{cache:"no-store"});if(!response.ok)throw new Error(`Failed to load ${path}: HTTP ${response.status}`);const rawCode=await response.text();if(!rawCode||!rawCode.trim())throw new Error(`Failed to load ${path}: empty response`);let code=addSafeUiPerformanceOptimizations(rawCode,path);if(path==="src/version.js")code=code.replaceAll("%%BRANCH%%",ref).replaceAll("%%COMMIT%%","source-loader").replaceAll("%%DATE%%",new Date().toISOString());const sourceUrl=`${rawBaseUrl}/${path}`;const evaluate=(source)=>{try{new Function(source);(0,eval)(`${source}\n//# sourceURL=${sourceUrl}`);return true;}catch(error){console.error(`[minibia-bot] Failed to evaluate ${path}`,error);return error;}};let error=evaluate(code);if(error&&code!==rawCode){console.warn(`[minibia-bot] ${path} transformed source failed; retrying original source`,error);error=evaluate(rawCode);}if(error)throw error;}
+  async function loadSourceFile(path){
+    const url=`${rawBaseUrl}/${path}?t=${Date.now()}-${Math.random()}`;
+    const response=await fetch(url,{cache:"no-store"});
+    if(!response.ok)throw new Error(`Failed to load ${path}: HTTP ${response.status}`);
+    const rawCode=await response.text();
+    if(!rawCode||!rawCode.trim())throw new Error(`Failed to load ${path}: empty response`);
+    const sourceUrl=`${rawBaseUrl}/${path}`;
+    const evaluate=(source)=>{try{new Function(source);(0,eval)(`${source}\n//# sourceURL=${sourceUrl}`);return null;}catch(error){return error;}};
+    let code=addSafeUiPerformanceOptimizations(rawCode,path);
+    if(path==="src/version.js")code=code.replaceAll("%%BRANCH%%",ref).replaceAll("%%COMMIT%%","source-loader").replaceAll("%%DATE%%",new Date().toISOString());
+    let error=evaluate(code);
+    if(error&&code!==rawCode){console.warn(`[minibia-bot] ${path} transformed source failed; retrying original source`,error);error=evaluate(rawCode);}
+    if(error&&path==="src/modules/cave-waypoint-actions.js"){
+      const fallbackUrl="https://raw.githubusercontent.com/seledoz/mintest3/2f0938a7c745bd819fa22aa008d50628a2472e49/src/modules/cave-waypoint-actions.js";
+      console.warn("[minibia-bot] Cave waypoint actions failed from main; loading known-good fallback commit",fallbackUrl,error);
+      const fallbackResponse=await fetch(`${fallbackUrl}?t=${Date.now()}-${Math.random()}`,{cache:"no-store"});
+      if(!fallbackResponse.ok)throw error;
+      const fallbackCode=await fallbackResponse.text();
+      const fallbackError=evaluate(fallbackCode);
+      if(!fallbackError)return;
+      console.error("[minibia-bot] Known-good Cave waypoint actions fallback also failed",fallbackError);
+      throw fallbackError;
+    }
+    if(error){console.error(`[minibia-bot] Failed to evaluate ${path}`,error);throw error;}
+  }
   async function load(){purgeLegacyCaveWaitDelay();if(window.minibiaBot?.destroy){try{window.minibiaBot.destroy();}catch(error){console.warn("[minibia-bot] Existing bot cleanup failed",error);}}purgeLegacyCaveWaitDelay();installUiCompatibilityShim();delete window.__minibiaBotBundle;window.__minibiaBotBundle={};for(const path of sourceFiles)await loadSourceFile(path);purgeLegacyCaveWaitDelay();watchForCavebotWaypointActionPanel();window.setTimeout(watchForCavebotWaypointActionPanel,250);window.setTimeout(watchForCavebotWaypointActionPanel,1000);keepPanelTitleBlank();normalizeCavePathfinderModeUi();window.setTimeout(normalizeCavePathfinderModeUi,250);window.setTimeout(normalizeCavePathfinderModeUi,1000);console.log(`[minibia-bot] Loaded source files from ${repository}@${ref}`);}
   load().catch(error=>console.error("[minibia-bot] Source loader failed",error));
 })();
