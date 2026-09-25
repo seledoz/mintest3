@@ -673,25 +673,12 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   function runUseWaypoint(index, waypoint, playerPosition) {
     if (!waypoint || !playerPosition) return false;
 
-    // A Use waypoint must be executed from the exact waypoint tile. Cavebot
-    // normally allows a one-tile tolerance for ordinary waypoints, so if we
-    // are beside the Use waypoint, explicitly step onto it instead of
-    // waiting forever for the normal pathing tick to land exactly on it.
+    // A Use waypoint must be executed from the exact waypoint tile.
+    // Do NOT step onto the waypoint here. Level doors can move the character
+    // onto/through the door when used; issuing a movement command first can
+    // cause the same door to be used again and send the character back out.
+    // Normal Cavebot movement is responsible for reaching the exact waypoint.
     if (getPositionKey(playerPosition) !== getPositionKey(waypoint)) {
-      if (isAtWaypoint(playerPosition, waypoint)) {
-        const distance = Math.abs(playerPosition.x - waypoint.x) + Math.abs(playerPosition.y - waypoint.y);
-        if (distance === 1) {
-          const stepped = bot.caveArrowKeys?.stepToPosition?.(waypoint);
-          if (stepped) {
-            stopCurrentMovement();
-            bot.log("cave Use waypoint stepping onto exact tile", {
-              index: index + 1,
-              from: playerPosition,
-              waypoint,
-            });
-          }
-        }
-      }
       if (useWaypointState.index === index) resetUseWaypointState();
       return false;
     }
