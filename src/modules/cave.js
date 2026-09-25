@@ -1072,37 +1072,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
     const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
 
-    // The client pathfinder may consider a waypoint reached while still
-    // adjacent to it. CaveBot itself has no waypoint tolerance anymore, so
-    // finish the last tile with the direct movement primitive instead of
-    // asking the native pathfinder to resolve the final square.
-    const exactFromPos = normalizePosition(from);
-    const exactWaypointPos = normalizePosition(waypoint);
-    if (exactFromPos && exactWaypointPos && exactFromPos.z === exactWaypointPos.z) {
-      const dx = exactWaypointPos.x - exactFromPos.x;
-      const dy = exactWaypointPos.y - exactFromPos.y;
-      const chebyshevDistance = Math.max(Math.abs(dx), Math.abs(dy));
-      if (chebyshevDistance === 0) return false;
-      if (chebyshevDistance === 1) {
-        const nextStep = {
-          x: exactFromPos.x + (Math.abs(dx) > 0 ? Math.sign(dx) : 0),
-          y: exactFromPos.y + (Math.abs(dx) === 0 && Math.abs(dy) > 0 ? Math.sign(dy) : 0),
-          z: exactFromPos.z,
-        };
-        if (bot.caveArrowKeys?.stepToPosition?.(nextStep)) {
-          state.lastPathAt = now;
-          bot.logDebug("cave exact final waypoint step", {
-            from: exactFromPos,
-            to: nextStep,
-            waypoint: exactWaypointPos,
-            action: waypointAction,
-            pathfinderMode: config.pathfinderMode,
-          });
-          return true;
-        }
-      }
-    }
-
     // Use waypoints must reach the exact waypoint. Do not force the route
     // through CaveBot's A* matrix here: Game/Direct/native pathfinding already
     // knows how to move through the normal map, while the final one-tile move
