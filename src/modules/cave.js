@@ -1087,10 +1087,33 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (!from || !waypoint) return false;
     const now = Date.now();
 
-    // All CaveBot pathing modes eventually call goToWaypoint(). Handle the
-    // final one-tile move for Rope Spell centrally so Game, Direct, A*, and
-    // any future mode use the same exact-tile behavior.
-    if (stepOntoExactUseWaypoint(waypoint, from)) return true;
+    // Use waypoints must never use waypointTolerance. For every pathfinder
+    // mode, build an exact (zero-tolerance) CaveBot A* route and advance only
+    // one tile at a time. This guarantees the player reaches the actual Use
+    // waypoint before the Use action fires.
+    if (waypointAction === "use") {
+      const fromPos = normalizePosition(from);
+      const waypointPos = normalizePosition(waypoint);
+      if (fromPos && waypointPos && fromPos.z === waypointPos.z) {
+        const usePath = findPathAStar(fromPos, waypointPos, 0);
+        if (usePath && usePath.length > 1) {
+          const stepped = bot.caveArrowKeys?.stepToPosition?.(normalizePosition(usePath[1]));
+          if (stepped) {
+            state.lastPathAt = now;
+            bot.logDebug("cave Use waypoint exact-tile step", {
+              from: fromPos,
+              to: normalizePosition(usePath[1]),
+              waypoint: waypointPos,
+              pathfinderMode: config.pathfinderMode,
+            });
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // Rope Spell also keeps its existing exact final-tile behavior.
     if (stepOntoExactRopeSpellWaypoint(waypoint, from)) return true;
 
     if (config.pathfinderMode === 'astar') {
