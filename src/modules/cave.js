@@ -1651,12 +1651,17 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (!route.length && state.running) stop();
     return removed;
   }
-  function setCurrentIndex(index) {
+  function setCurrentIndex(index, directionOverride = null) {
     if (!route.length) { state.currentIndex = 0; state.direction = 1; return 0; }
     const nextIndex = Math.max(0, Math.min(route.length - 1, Math.trunc(Number(index) || 0)));
     state.currentIndex = nextIndex;
-    state.direction = nextIndex >= route.length - 1 ? -1 : 1;
-    if (route.length <= 1) state.direction = 1;
+    if (route.length <= 1) {
+      state.direction = 1;
+    } else if (Number(directionOverride) === 1 || Number(directionOverride) === -1) {
+      state.direction = Number(directionOverride);
+    } else {
+      state.direction = nextIndex >= route.length - 1 ? -1 : 1;
+    }
     return state.currentIndex;
   }
   function status() {
