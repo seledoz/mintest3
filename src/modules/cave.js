@@ -392,18 +392,19 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       .filter(n => matrix.get(`${n.x},${n.y}`) === true);
   }
 
-  function getCachedPath(from, to) {
-    const key = `${from.x},${from.y},${from.z}-${to.x},${to.y},${to.z}`;
+  function getCachedPath(from, to, waypointTolerance = null) {
+    const tolerance = waypointTolerance == null ? "default" : String(Math.max(0, Math.trunc(Number(waypointTolerance) || 0)));
+    const key = [from.x, from.y, from.z, to.x, to.y, to.z, tolerance].join(",");
     const entry = pathCache.get(key);
     if (entry && Date.now() - entry.at < PATHFINDER_CONFIG.pathCacheTTL) return entry.path;
     return null;
   }
 
-  function setCachedPath(from, to, path) {
-    const key = `${from.x},${from.y},${from.z}-${to.x},${to.y},${to.z}`;
+  function setCachedPath(from, to, path, waypointTolerance = null) {
+    const tolerance = waypointTolerance == null ? "default" : String(Math.max(0, Math.trunc(Number(waypointTolerance) || 0)));
+    const key = [from.x, from.y, from.z, to.x, to.y, to.z, tolerance].join(",");
     pathCache.set(key, { path, at: Date.now() });
   }
-
   function findPathAStar(from, to, waypointTolerance = null) {
     patchFieldWalkabilityForCavePathing();
     from = normalizePosition(from);
@@ -412,7 +413,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (from.x === to.x && from.y === to.y && from.z === to.z) return [];
     if (from.z !== to.z) return null;
 
-    const cached = getCachedPath(from, to);
+    const cached = getCachedPath(from, to, waypointTolerance);
     if (cached) return cached;
 
     const matrix = getAStarWalkabilityMatrix(from, from.z);
@@ -423,7 +424,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       tolerance
     );
 
-    if (path) setCachedPath(from, to, path);
+    if (path) setCachedPath(from, to, path, waypointTolerance);
     return path;
   }
 
@@ -1102,45 +1103,46 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         return false;
       }
 
-      const distance = Math.max(
-        Math.abs(fromPos.x - waypointPos.x),
-        Math.abs(fromPos.y - waypointPos.y)
-      );
+      // Stage the native route two tiles at a time. Native pathfinding can
+      // stop within its own tolerance, so targeting the exact Use waypoint
+      // directly can leave the player permanently one tile short.
+      const usePath = findPathAStar(fromPos, waypointPos, 0);
+      if (usePath && usePath.length > 1) {
+        const nextIndex = usePath.length > 2 ? 2 : 1;
+        const nextPos = normalizePosition(usePath[nextIndex]);
 
-      if (distance === 1) {
-        const stepped = bot.caveArrowKeys?.stepToPosition?.(waypointPos);
-        if (stepped) {
-          state.lastPathAt = now;
-          bot.logDebug("cave Use waypoint exact final step", {
-            from: fromPos,
-            to: waypointPos,
-            pathfinderMode: config.pathfinderMode,
-          });
-          return true;
+        if (nextPos && nextIndex === 1) {
+          const stepped = bot.caveArrowKeys?.stepToPosition?.(nextPos);
+          if (stepped) {
+            state.lastPathAt = now;
+            bot.logDebug("cave Use waypoint exact final step", { from: fromPos, to: nextPos, waypoint: waypointPos, pathfinderMode: config.pathfinderMode });
+            return true;
+          }
+        }
+
+        if (nextPos) {
+          try {
+            window.gameClient?.world?.pathfinder?.findPath?.(from, new Position(nextPos.x, nextPos.y, nextPos.z));
+            state.lastPathAt = now;
+            bot.logDebug("cave Use waypoint staged native path", { from: fromPos, target: nextPos, waypoint: waypointPos, remainingPathTiles: usePath.length - 1, pathfinderMode: config.pathfinderMode });
+            return true;
+          } catch (error) {
+            bot.log("cave Use waypoint staged path failed", { target: nextPos, waypoint: waypointPos, error: error?.message || error });
+          }
         }
       }
 
+      // Native fallback if CaveBot's local A* matrix cannot see the route.
       try {
-        window.gameClient?.world?.pathfinder?.findPath?.(
-          from,
-          new Position(waypointPos.x, waypointPos.y, waypointPos.z)
-        );
+        window.gameClient?.world?.pathfinder?.findPath?.(from, new Position(waypointPos.x, waypointPos.y, waypointPos.z));
         state.lastPathAt = now;
-        bot.logDebug("cave Use waypoint native exact destination", {
-          from: fromPos,
-          waypoint: waypointPos,
-          pathfinderMode: config.pathfinderMode,
-        });
+        bot.logDebug("cave Use waypoint native fallback", { from: fromPos, waypoint: waypointPos, pathfinderMode: config.pathfinderMode });
         return true;
       } catch (error) {
-        bot.log("cave Use waypoint pathing failed", {
-          waypoint: waypointPos,
-          error: error?.message || error,
-        });
+        bot.log("cave Use waypoint pathing failed", { waypoint: waypointPos, error: error?.message || error });
         return false;
       }
     }
-
     // Rope Spell also keeps its existing exact final-tile behavior.
     if (stepOntoExactRopeSpellWaypoint(waypoint, from)) return true;
 
