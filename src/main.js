@@ -413,7 +413,7 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
         const field = document.createElement("label"); field.className = "mb-field";
         const label = document.createElement("span"); label.className = "mb-field-label"; label.textContent = "Waypoint Action";
         select = document.createElement("select"); select.id = "minibia-bot-cave-waypoint-action";
-        [["walk","Walk"],["rope","Use Rope"],["ropeSpell","Rope Spell (Exani Tera)"],["haste","Haste Waypoint"],["shovel","Use Shovel"],["wait","Waypoint Wait (1 Minute)"]].forEach(([value,text]) => { const option=document.createElement("option"); option.value=value; option.textContent=text; select.appendChild(option); });
+        [["walk","Walk"],["rope","Use Rope"],["ropeSpell","Rope Spell (Exani Tera)"],["haste","Haste Waypoint"],["shovel","Use Shovel"],["wait","Waypoint Wait (1 Minute)"],["use","Use"]].forEach(([value,text]) => { const option=document.createElement("option"); option.value=value; option.textContent=text; select.appendChild(option); });
         field.append(label, select);
         const pathfinder = caveSection.querySelector("#minibia-bot-cave-pathfinder-mode")?.closest(".mb-field");
         if (pathfinder) pathfinder.insertAdjacentElement("beforebegin", field); else caveSection.querySelector(".mb-stack")?.appendChild(field);
