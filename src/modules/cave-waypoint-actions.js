@@ -597,23 +597,32 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const targetRef = { which: targetTile, index: 0xFF };
     let sent = false;
 
-    // Plain "Use" is a one-target action: there is no source item. The
-    // client's internal handler expects the source argument to be null and
-    // the target tile as the second argument. This is different from rope /
-    // shovel, which pass an inventory item as the source.
-    if (typeof mouse?.__handleItemUseWith === "function") {
+    // Plain "Use" is a one-target action. Prefer the client's dedicated
+    // handler; __handleItemUseWith is for using one thing on another thing.
+    if (typeof mouse?.__handleItemUse === "function") {
+      try {
+        mouse.__handleItemUse(targetRef);
+        sent = true;
+      } catch (_) {}
+    }
+
+    if (!sent && typeof mouse?.__handleItemUseWith === "function") {
       try {
         mouse.__handleItemUseWith(null, targetRef);
         sent = true;
       } catch (_) {}
     }
 
-    // Fallback for clients exposing the public mouse.use helper.
     if (!sent && typeof mouse?.use === "function") {
       try {
         mouse.use(targetRef);
         sent = true;
-      } catch (_) {}
+      } catch (_) {
+        try {
+          mouse.use(targetTile);
+          sent = true;
+        } catch (_) {}
+      }
     }
 
     if (!sent) {
