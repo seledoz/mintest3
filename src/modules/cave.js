@@ -1527,10 +1527,11 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         waypoint = advanceWaypoint();
       }
       if (!waypoint) { bot.logDebug("cave no waypoint after advance, stopping"); return; }
-      if (blockingWaypointAction) {
-        // The action runner owns this waypoint until it explicitly advances.
-        // Do not let the normal movement/pathfinder logic walk past it.
-        bot.logDebug("cave holding action waypoint", { index: state.currentIndex + 1, waypoint, exactWaypoint });
+      if (blockingWaypointAction && exactWaypoint) {
+        // Once on the exact tile, the action runner owns the waypoint until
+        // it explicitly advances. Before that, normal movement may continue
+        // toward the exact tile, but the tolerance check above must not skip it.
+        bot.logDebug("cave holding exact action waypoint", { index: state.currentIndex + 1, waypoint });
         return;
       }
       if (position && waypoint.z !== position.z) {
