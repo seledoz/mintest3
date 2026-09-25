@@ -609,40 +609,53 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const mouse = window.gameClient?.mouse;
     const targetRef = { which: targetTile, index: 0xFF };
     let sent = false;
+    let handler = null;
+    let result = null;
 
-    // Plain "Use" is a one-target action. Prefer the client's dedicated
-    // handler; __handleItemUseWith is for using one thing on another thing.
-    if (typeof mouse?.__handleItemUse === "function") {
+    // The Cavebot's existing ladder/floor-change implementation uses this
+    // exact one-target call successfully. Use it first instead of assuming
+    // the private handlers have the same semantics.
+    if (typeof mouse?.use === "function") {
       try {
-        mouse.__handleItemUse(targetRef);
-        sent = true;
+        result = mouse.use(targetRef);
+        handler = "mouse.use(targetRef)";
+        sent = result !== false;
+      } catch (_) {
+        try {
+          result = mouse.use(targetTile);
+          handler = "mouse.use(targetTile)";
+          sent = result !== false;
+        } catch (_) {}
+      }
+    }
+
+    // Only fall back when the public handler rejected the request.
+    if (!sent && typeof mouse?.__handleItemUse === "function") {
+      try {
+        result = mouse.__handleItemUse(targetRef);
+        handler = "mouse.__handleItemUse(targetRef)";
+        sent = result !== false;
       } catch (_) {}
     }
 
     if (!sent && typeof mouse?.__handleItemUseWith === "function") {
       try {
-        mouse.__handleItemUseWith(null, targetRef);
-        sent = true;
+        result = mouse.__handleItemUseWith(null, targetRef);
+        handler = "mouse.__handleItemUseWith(null,targetRef)";
+        sent = result !== false;
       } catch (_) {}
     }
 
-    if (!sent && typeof mouse?.use === "function") {
-      try {
-        mouse.use(targetRef);
-        sent = true;
-      } catch (_) {
-        try {
-          mouse.use(targetTile);
-          sent = true;
-        } catch (_) {}
-      }
-    }
+    bot.log("cave Use waypoint tile-use dispatch", {
+      direction: normalizedDirection,
+      waypoint: waypointPosition,
+      target: targetPosition,
+      handler,
+      result: result === undefined ? "undefined" : result,
+      sent,
+    });
 
     if (!sent) {
-      bot.log("cave Use waypoint failed: no compatible tile-use handler available", {
-        direction: normalizedDirection,
-        target: targetPosition,
-      });
       return false;
     }
 
