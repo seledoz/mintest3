@@ -674,68 +674,63 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   function runUseWaypoint(index, waypoint, playerPosition) {
     if (!waypoint || !playerPosition) return false;
 
-    // A Use waypoint must be executed from the exact waypoint tile.
-    // Do NOT step onto the waypoint here. Level doors can move the character
-    // onto/through the door when used; issuing a movement command first can
-    // cause the same door to be used again and send the character back out.
-    // Normal Cavebot movement is responsible for reaching the exact waypoint.
+    // A Use waypoint is reached only when the player is on its exact tile.
+    // Once reached, immediately execute the configured directional use and
+    // then advance the route. Do not wait for the door/floor movement result;
+    // the game server is responsible for applying that movement.
     if (getPositionKey(playerPosition) !== getPositionKey(waypoint)) {
       if (useWaypointState.index === index) resetUseWaypointState();
       return false;
     }
+
     const waypointKey = getActivePresetName() + ":" + index + ":" + getPositionKey(waypoint);
     const direction = normalizeUseDirection(getWaypointUseDirections()[index]);
     const now = Date.now();
 
-    if (useWaypointState.index !== index || useWaypointState.waypointKey !== waypointKey || useWaypointState.direction !== direction) {
-      stopCurrentMovement();
-      useWaypointState.phase = "settleBeforeUse";
+    if (useWaypointState.index !== index ||
+        useWaypointState.waypointKey !== waypointKey ||
+        useWaypointState.direction !== direction) {
+      useWaypointState.phase = "ready";
       useWaypointState.index = index;
       useWaypointState.direction = direction;
       useWaypointState.waypointKey = waypointKey;
       useWaypointState.startedAt = now;
       useWaypointState.useAt = 0;
       useWaypointState.resumeAt = 0;
-      bot.log("cave Use waypoint reached; settling before directional use", { index: index + 1, direction, waypoint, delayMs: USE_WAYPOINT_SETTLE_MS });
-      return true;
-    }
+      useWaypointState.usedFromPositionKey = getPositionKey(playerPosition);
 
-    if (useWaypointState.phase === "settleBeforeUse") {
-      if (now - useWaypointState.startedAt < USE_WAYPOINT_SETTLE_MS) return true;
-      if (useDirectionalUse(waypoint, direction)) {
-        useWaypointState.phase = "settleAfterUse";
-        useWaypointState.useAt = now;
-        useWaypointState.resumeAt = now + USE_WAYPOINT_SETTLE_MS;
-        useWaypointState.usedFromPositionKey = getPositionKey(playerPosition);
-        stopCurrentMovement();
-        bot.log("cave Use waypoint directional use sent; waiting for door/floor movement before continuing", { index: index + 1, direction, delayMs: USE_WAYPOINT_SETTLE_MS });
-      }
-      return true;
-    }
+      stopCurrentMovement();
 
-    if (useWaypointState.phase === "settleAfterUse") {
-      // A level door can physically move the player after the use packet is
-      // sent. Do not advance and let Cavebot walk back onto the door while
-      // the player is still on the original waypoint. Wait until the game
-      // reports that the player actually moved away (or changed floors).
-      if (now - useWaypointState.useAt < USE_WAYPOINT_SETTLE_MS) return true;
-
-      const currentPositionKey = getPositionKey(playerPosition);
-      const movedFromUseTile = currentPositionKey !== useWaypointState.usedFromPositionKey;
-      if (!movedFromUseTile) {
-        // Keep the Use waypoint blocking movement so it cannot be triggered
-        // repeatedly while the level door animation/server movement settles.
+      // The player has reached this waypoint. Use it once, in the selected
+      // direction, then mark the waypoint complete and continue the route.
+      if (!useDirectionalUse(waypoint, direction)) {
+        bot.log("cave Use waypoint reached but directional use was not sent", {
+          index: index + 1,
+          direction,
+          waypoint,
+        });
         return true;
       }
+
+      useWaypointState.phase = "complete";
+      useWaypointState.useAt = now;
 
       const status = bot.cave?.status?.();
       if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
         bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
       }
-      bot.log("cave Use waypoint complete; player moved after use, continuing route", { index: index + 1, direction, from: useWaypointState.usedFromPositionKey, to: currentPositionKey });
+
+      bot.log("cave Use waypoint reached; directional use sent and waypoint advanced", {
+        index: index + 1,
+        direction,
+        waypoint,
+      });
+
       resetUseWaypointState();
       return true;
     }
+
+    // The waypoint was already handled on this arrival.
     return true;
   }
 
