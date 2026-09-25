@@ -335,6 +335,10 @@ window.__minibiaBotBundle.createBot = function createBot() {
       return null;
     },
     pushLogEntry(level, args) {
+      // Debug traces can run every tick. When tracing is disabled, skip all
+      // formatting, position reads, timestamps and buffer allocations.
+      if (level === "debug" && !debugEnabled) return;
+
       const now = Date.now();
       const d = new Date(now);
       const time = d.toLocaleTimeString("pt-BR", { hour12: false }) + "." +
@@ -346,9 +350,8 @@ window.__minibiaBotBundle.createBot = function createBot() {
       logBuffer.push({ at: now, time, position: pos, text, data, level });
       if (logBuffer.length > MAX_LOG_ENTRIES) logBuffer.shift();
 
-      // Debug logging can be extremely frequent (combat/cavebot loops). Keep the
-      // entries in the in-memory trace buffer, but do not stringify and print
-      // every debug object to the browser console. Console I/O can tank game FPS.
+      // Debug entries stay in the trace buffer but are never printed to the
+      // browser console. Console I/O and object serialization can tank FPS.
       if (level === "debug") return;
 
       const posStr = pos ? `[${pos.x},${pos.y},${pos.z}] ` : "";
