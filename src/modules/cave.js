@@ -1,6 +1,16 @@
 window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
+  // Remove the old waypoint-tolerance pathfinder wrapper if it is still
+  // present in the current game runtime from an earlier module load.
+  // This restores the native pathfinder for every CaveBot pathing mode.
+  try {
+    const pathfinder = window.gameClient?.world?.pathfinder;
+    if (pathfinder?.findPath?.__caveWaypointTolerancePatched &&
+        typeof pathfinder.findPath.__originalFindPath === "function") {
+      pathfinder.findPath = pathfinder.findPath.__originalFindPath;
+    }
+  } catch (_) {}
   const configStorageKey = "minibiaBot.cave.config";
   const routeStorageKey = "minibiaBot.cave.route";
   const transitionStorageKey = "minibiaBot.cave.transitions";
@@ -53,6 +63,12 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   const minimapOverlayState = {
     timerId: null,
   };
+
+  const storedConfig = bot.storage.get(configStorageKey, {}) || {};
+  if (Object.prototype.hasOwnProperty.call(storedConfig, "waypointTolerance")) {
+    delete storedConfig.waypointTolerance;
+    bot.storage.set(configStorageKey, storedConfig);
+  }
 
   const config = Object.assign(
     {
