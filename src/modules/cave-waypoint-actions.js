@@ -674,24 +674,6 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   function runUseWaypoint(index, waypoint, playerPosition) {
     if (!waypoint || !playerPosition) return false;
 
-    // Temporary diagnostic trace: record every Use waypoint evaluation so we
-    // can see exactly why a later lap does or does not dispatch the use.
-    try {
-      console.warn("[CAVEBOT USE TRACE] waypoint check", {
-        index: index + 1,
-        waypoint,
-        playerPosition,
-        exact: getPositionKey(playerPosition) === getPositionKey(waypoint),
-        preset: getActivePresetName(),
-        state: {
-          index: useWaypointState.index,
-          waypointKey: useWaypointState.waypointKey,
-          direction: useWaypointState.direction,
-          phase: useWaypointState.phase,
-        },
-      });
-    } catch (_) {}
-
     // A Use waypoint is reached only when the player is on its exact tile.
     // Once reached, immediately execute the configured directional use and
     // then advance the route. Do not wait for the door/floor movement result;
@@ -734,26 +716,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       useWaypointState.useAt = now;
 
       const status = bot.cave?.status?.();
-      const beforeIndex = Math.trunc(Number(status?.currentIndex) || 0);
-      const nextIndex = getNextRouteIndex(status);
-      try {
-        console.warn("[CAVEBOT USE TRACE] advancing after use", {
-          index: index + 1,
-          beforeIndex: beforeIndex + 1,
-          nextIndex: nextIndex + 1,
-          direction: status?.direction,
-          routeLength: status?.route?.length || bot.cave?.getRoute?.()?.length || 0,
-        });
-      } catch (_) {}
-      if (status?.running && beforeIndex === index) {
-        const appliedIndex = bot.cave?.setCurrentIndex?.(nextIndex);
-        try {
-          console.warn("[CAVEBOT USE TRACE] advance result", {
-            requested: nextIndex + 1,
-            applied: Number(appliedIndex) + 1,
-            actual: Math.trunc(Number(bot.cave?.status?.()?.currentIndex) || 0) + 1,
-          });
-        } catch (_) {}
+      if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
+        bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
       }
 
       bot.log("cave Use waypoint reached; directional use sent and waypoint advanced", {
@@ -888,28 +852,39 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
 
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
-
+    if (action === useAction) {
+      // Hard trace: this must appear whenever the Cavebot reaches a Use
+      // waypoint. It tells us whether the action is actually being selected
+      // before we investigate the mouse/tile dispatch.
+      const trace = {
+        index: index + 1,
+        action,
+        preset: getActivePresetName(),
+        waypoint,
+        playerPosition,
+        direction: normalizeUseDirection(getWaypointUseDirections()[index]),
+        exact: getPositionKey(playerPosition) === getPositionKey(waypoint),
+      };
+      try { console.warn("[CAVEBOT USE TRACE] action selected", trace); } catch (_) {}
+      bot.log("CAVEBOT USE TRACE: action selected", trace);
+    }
     if (action !== ropeSpellAction && ropeSpellState.active && ropeSpellState.index === index) {
       ropeSpellState.active = false;
       ropeSpellState.index = -1;
       ropeSpellState.startZ = null;
     }
-
     if (action === ropeSpellAction) {
       runRopeSpellWaypoint(index, waypoint, playerPosition);
       return;
     }
-
     if (action === hasteAction) {
       runHasteWaypoint(index, waypoint, playerPosition);
       return;
     }
-
     if (action === waitAction) {
       if (isAtWaypoint(playerPosition, waypoint)) startWaypointWait(status, index, waypoint);
       return;
     }
-
     if (action === useAction) {
       // Return the handler result so Cavebot's main tick knows the Use
       // waypoint is actively blocking normal waypoint movement.
@@ -1041,6 +1016,20 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       const index = Math.trunc(Number(status?.currentIndex) || 0);
       const actions = getWaypointActions();
       const action = actions[index];
+      // Diagnostic trace at the boundary between CaveBot's movement loop and
+      // the waypoint-action module. If this never appears, the action module
+      // is not being called by the live CaveBot runtime.
+      if (status?.running) {
+        const trace = {
+          running: !!status.running,
+          index: index + 1,
+          action,
+          routeLength: route.length,
+          preset: getActivePresetName(),
+        };
+        try { console.warn("[CAVEBOT ACTION RUNNER TRACE]", trace); } catch (_) {}
+        bot.log("CAVEBOT ACTION RUNNER TRACE", trace);
+      }
       return runWaypointActionCheck();
     } catch (error) {
       try { console.error("[CAVEBOT ACTION RUNNER ERROR]", error); } catch (_) {}
