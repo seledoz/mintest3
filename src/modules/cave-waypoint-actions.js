@@ -915,6 +915,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
     if (!select.__caveWaypointActionsRopeSpellAddBound) {
       recordButton.addEventListener("click", () => window.setTimeout(() => {
+        if (select.value === useAction && useDirectionSelect) setLastWaypointUseDirection(useDirectionSelect.value);
         if (select.value !== ropeSpellAction || !ropeSpellPendingHotkey) return;
         setWaypointRopeSpellHotkey(ropeSpellPendingHotkey);
         syncRopeSpellHotkeyVisibility();
