@@ -578,9 +578,22 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     if (!playerPosition || !waypointPosition || !targetPosition) return false;
     if (getPositionKey(playerPosition) !== getPositionKey(waypointPosition)) return false;
 
-    const targetTile = getLoadedTiles().find(
-      (tile) => getPositionKey(getTilePosition(tile)) === getPositionKey(targetPosition)
-    );
+    // Use the same world lookup that Cavebot's working floor-change
+    // actions use. The chunk list can omit/update tiles differently from
+    // the game's authoritative world lookup, which made directional Use
+    // silently fail even though the waypoint position was correct.
+    let targetTile = null;
+    try {
+      const worldPosition = new Position(targetPosition.x, targetPosition.y, targetPosition.z);
+      targetTile = window.gameClient?.world?.getTileFromWorldPosition?.(worldPosition) || null;
+    } catch (_) {}
+
+    if (!targetTile) {
+      targetTile = getLoadedTiles().find(
+        (tile) => getPositionKey(getTilePosition(tile)) === getPositionKey(targetPosition)
+      ) || null;
+    }
+
     if (!targetTile) {
       bot.log("cave Use waypoint waiting for directional target tile", {
         direction: normalizedDirection,
