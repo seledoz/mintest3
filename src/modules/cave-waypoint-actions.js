@@ -888,24 +888,28 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
 
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
-    if (action === useAction) {
+
     if (action !== ropeSpellAction && ropeSpellState.active && ropeSpellState.index === index) {
       ropeSpellState.active = false;
       ropeSpellState.index = -1;
       ropeSpellState.startZ = null;
     }
+
     if (action === ropeSpellAction) {
       runRopeSpellWaypoint(index, waypoint, playerPosition);
       return;
     }
+
     if (action === hasteAction) {
       runHasteWaypoint(index, waypoint, playerPosition);
       return;
     }
+
     if (action === waitAction) {
       if (isAtWaypoint(playerPosition, waypoint)) startWaypointWait(status, index, waypoint);
       return;
     }
+
     if (action === useAction) {
       // Return the handler result so Cavebot's main tick knows the Use
       // waypoint is actively blocking normal waypoint movement.
