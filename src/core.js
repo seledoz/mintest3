@@ -22,6 +22,9 @@ window.__minibiaBotBundle.createBot = function createBot() {
   const MAX_LOG_ENTRIES = 2000;
   const logBuffer = [];
   let debugEnabled = false;
+  let debugMetaAt = 0;
+  let debugMetaTime = "";
+  let debugMetaPosition = null;
 
   function addCleanup(fn) {
     if (typeof fn === "function") {
@@ -340,10 +343,29 @@ window.__minibiaBotBundle.createBot = function createBot() {
       if (level === "debug" && !debugEnabled) return;
 
       const now = Date.now();
-      const d = new Date(now);
-      const time = d.toLocaleTimeString("pt-BR", { hour12: false }) + "." +
-        String(d.getMilliseconds()).padStart(3, "0");
-      const pos = this.getLoggerPosition();
+      let time;
+      let pos;
+
+      // Debug traces can be emitted many times per second. Reuse the clock
+      // string and player position for 100 ms so tracing does not repeatedly
+      // invoke locale formatting and game-state lookups.
+      if (level === "debug") {
+        if (now - debugMetaAt >= 100 || !debugMetaAt) {
+          const d = new Date(now);
+          debugMetaTime = d.toLocaleTimeString("pt-BR", { hour12: false }) + "." +
+            String(d.getMilliseconds()).padStart(3, "0");
+          debugMetaPosition = this.getLoggerPosition();
+          debugMetaAt = now;
+        }
+        time = debugMetaTime;
+        pos = debugMetaPosition;
+      } else {
+        const d = new Date(now);
+        time = d.toLocaleTimeString("pt-BR", { hour12: false }) + "." +
+          String(d.getMilliseconds()).padStart(3, "0");
+        pos = this.getLoggerPosition();
+      }
+
       const text = String(args[0] || "");
       const data = args.length > 1 ? args[1] : null;
 
