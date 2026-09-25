@@ -2,6 +2,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCaveWaypointActionsModule(bot) {
   const actionStorageKey = "minibiaBot.cave.waypointActions";
+  const waypointActionPositionStorageKey = "minibiaBot.cave.waypointActionsByPosition";
   const hasteSpellStorageKey = "minibiaBot.cave.waypointHasteSpells";
   const ropeSpellHotkeyStorageKey = "minibiaBot.cave.waypointRopeSpellHotkeys";
   const hasteHotkeyStorageKey = "minibiaBot.cave.waypointHasteHotkeys";
@@ -92,18 +93,60 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     return next;
   }
 
+  function readAllPositionActions() {
+    const raw = bot.storage.get(waypointActionPositionStorageKey, {});
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  }
+
+  function writeAllPositionActions(next) {
+    bot.storage.set(waypointActionPositionStorageKey, next);
+    return next;
+  }
+
+  function getWaypointPositionKey(waypoint) {
+    const position = normalizePosition(waypoint);
+    return position ? `${position.x},${position.y},${position.z}` : null;
+  }
+
   function getPresetActions(name = getActivePresetName()) {
+    const presetName = normalizePresetName(name);
     const allActions = readAllActions();
-    const actions = allActions[normalizePresetName(name)];
-    return Array.isArray(actions) ? actions.slice() : [];
+    const stored = allActions[presetName];
+    const actions = Array.isArray(stored) ? stored.slice() : [];
+    const byPosition = readAllPositionActions()[presetName];
+    const route = bot.cave?.getRoute?.() || [];
+
+    // Prefer the position-bound action when available. This prevents a Use
+    // action from changing meaning when the route index moves during a lap
+    // or when a preset is reloaded.
+    return Array.from({ length: route.length }, (_, index) => {
+      const key = getWaypointPositionKey(route[index]);
+      if (key && byPosition && Object.prototype.hasOwnProperty.call(byPosition, key)) {
+        return normalizeAction(byPosition[key]);
+      }
+      return normalizeAction(actions[index]);
+    });
   }
 
   function savePresetActions(actions, name = getActivePresetName()) {
+    const presetName = normalizePresetName(name);
     const allActions = readAllActions();
-    const routeLength = bot.cave?.getRoute?.().length || 0;
-    allActions[normalizePresetName(name)] = Array.from({ length: routeLength }, (_, index) => normalizeAction(actions[index]));
+    const route = bot.cave?.getRoute?.() || [];
+    const normalized = Array.from({ length: route.length }, (_, index) => normalizeAction(actions[index]));
+    allActions[presetName] = normalized;
     writeAllActions(allActions);
-    return allActions[normalizePresetName(name)].slice();
+
+    const allPositionActions = readAllPositionActions();
+    const byPosition = allPositionActions[presetName] && typeof allPositionActions[presetName] === "object"
+      ? { ...allPositionActions[presetName] }
+      : {};
+    route.forEach((waypoint, index) => {
+      const key = getWaypointPositionKey(waypoint);
+      if (key) byPosition[key] = normalized[index];
+    });
+    allPositionActions[presetName] = byPosition;
+    writeAllPositionActions(allPositionActions);
+    return normalized.slice();
   }
 
   function getUseTargetPosition(waypoint,direction){ const normalized=normalizePosition(waypoint); if(!normalized)return null; const offsets={N:[0,-1],NE:[1,-1],E:[1,0],SE:[1,1],S:[0,1],SW:[-1,1],W:[-1,0],NW:[-1,-1]}; const o=offsets[normalizeUseDirection(direction)]||offsets.N; return {x:normalized.x+o[0],y:normalized.y+o[1],z:normalized.z}; }
@@ -224,7 +267,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const actions = getWaypointActions();
     actions[normalizedIndex] = normalizeAction(action);
     savePresetActions(actions);
-    bot.log("cave waypoint action updated", { index: normalizedIndex + 1, action: actions[normalizedIndex] });
+    bot.log("cave waypoint action updated", {
+      index: normalizedIndex + 1,
+      waypoint: bot.cave?.getRoute?.()[normalizedIndex],
+      action: actions[normalizedIndex],
+    });
     return actions[normalizedIndex];
   }
 
@@ -546,7 +593,13 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
     const status = bot.cave?.status?.();
     if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
-      bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+      const nextIndex = getNextRouteIndex(status);
+      // setCurrentIndex() derives direction from the destination index. That
+      // breaks ping-pong routes when an action advances while travelling
+      // backwards. Preserve the Cavebot's current travel direction.
+      const direction = Number(status.direction) || 1;
+      bot.cave?.setCurrentIndex?.(nextIndex);
+      bot.cave?.setDirection?.(direction);
     }
     return true;
   }
