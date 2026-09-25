@@ -1086,6 +1086,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const from = bot.getPlayerPosition();
     if (!from || !waypoint) return false;
     const now = Date.now();
+    const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
+    const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
 
     // Use waypoints must never use waypointTolerance. For every pathfinder
     // mode, build an exact (zero-tolerance) CaveBot A* route and advance only
@@ -1119,8 +1121,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (config.pathfinderMode === 'astar') {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
-      const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
-      const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
       const requiresExactWaypoint = waypointAction === "ropeSpell" || waypointAction === "use";
       const path = findPathAStar(fromPos, waypointPos, requiresExactWaypoint ? 0 : null);
       if (path && path.length > 0) {
@@ -1157,9 +1157,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       }
     }
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
-    const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
-    const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
-
     // Game/Direct/native modes normally delegate the whole route to the
     // client pathfinder. When Walk Over Fields is enabled, build the same
     // CaveBot A* route first. If any tile on that route is a fire field,
