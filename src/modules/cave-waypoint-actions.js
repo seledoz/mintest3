@@ -674,6 +674,24 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   function runUseWaypoint(index, waypoint, playerPosition) {
     if (!waypoint || !playerPosition) return false;
 
+    // Temporary diagnostic trace: record every Use waypoint evaluation so we
+    // can see exactly why a later lap does or does not dispatch the use.
+    try {
+      console.warn("[CAVEBOT USE TRACE] waypoint check", {
+        index: index + 1,
+        waypoint,
+        playerPosition,
+        exact: getPositionKey(playerPosition) === getPositionKey(waypoint),
+        preset: getActivePresetName(),
+        state: {
+          index: useWaypointState.index,
+          waypointKey: useWaypointState.waypointKey,
+          direction: useWaypointState.direction,
+          phase: useWaypointState.phase,
+        },
+      });
+    } catch (_) {}
+
     // A Use waypoint is reached only when the player is on its exact tile.
     // Once reached, immediately execute the configured directional use and
     // then advance the route. Do not wait for the door/floor movement result;
@@ -716,8 +734,26 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       useWaypointState.useAt = now;
 
       const status = bot.cave?.status?.();
-      if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
-        bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+      const beforeIndex = Math.trunc(Number(status?.currentIndex) || 0);
+      const nextIndex = getNextRouteIndex(status);
+      try {
+        console.warn("[CAVEBOT USE TRACE] advancing after use", {
+          index: index + 1,
+          beforeIndex: beforeIndex + 1,
+          nextIndex: nextIndex + 1,
+          direction: status?.direction,
+          routeLength: status?.route?.length || bot.cave?.getRoute?.()?.length || 0,
+        });
+      } catch (_) {}
+      if (status?.running && beforeIndex === index) {
+        const appliedIndex = bot.cave?.setCurrentIndex?.(nextIndex);
+        try {
+          console.warn("[CAVEBOT USE TRACE] advance result", {
+            requested: nextIndex + 1,
+            applied: Number(appliedIndex) + 1,
+            actual: Math.trunc(Number(bot.cave?.status?.()?.currentIndex) || 0) + 1,
+          });
+        } catch (_) {}
       }
 
       bot.log("cave Use waypoint reached; directional use sent and waypoint advanced", {
