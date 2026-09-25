@@ -927,7 +927,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     // route-advance gate.
     const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
     const currentAction = bot.cave?.getWaypointActions?.()[currentIndex];
-    if (currentAction === "ropeSpell") {
+    if (currentAction === "ropeSpell" || currentAction === "use") {
       return (
         Number(position.x) === Number(waypoint.x) &&
         Number(position.y) === Number(waypoint.y) &&
@@ -1004,6 +1004,19 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     }
     return patched;
   }
+  function stepOntoExactUseWaypoint(waypoint, from) {
+    const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
+    if (bot.cave?.getWaypointActions?.()[currentIndex] !== "use") return false;
+    const fromPos = normalizePosition(from);
+    const waypointPos = normalizePosition(waypoint);
+    if (!fromPos || !waypointPos || fromPos.z !== waypointPos.z || Math.abs(fromPos.x - waypointPos.x) + Math.abs(fromPos.y - waypointPos.y) !== 1) return false;
+    const stepped = bot.caveArrowKeys?.stepToPosition?.(waypointPos);
+    if (!stepped) return false;
+    state.lastPathAt = Date.now();
+    bot.log("cave Use waypoint stepped onto exact tile", { ...waypoint, index: currentIndex + 1, pathfinderMode: config.pathfinderMode });
+    return true;
+  }
+
   function stepOntoExactRopeSpellWaypoint(waypoint, from) {
     const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
     const action = bot.cave?.getWaypointActions?.()[currentIndex];
@@ -1077,6 +1090,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     // All CaveBot pathing modes eventually call goToWaypoint(). Handle the
     // final one-tile move for Rope Spell centrally so Game, Direct, A*, and
     // any future mode use the same exact-tile behavior.
+    if (stepOntoExactUseWaypoint(waypoint, from)) return true;
     if (stepOntoExactRopeSpellWaypoint(waypoint, from)) return true;
 
     if (config.pathfinderMode === 'astar') {
@@ -1084,7 +1098,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const waypointPos = normalizePosition(waypoint);
       const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
       const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
-      const requiresExactWaypoint = waypointAction === "ropeSpell";
+      const requiresExactWaypoint = waypointAction === "ropeSpell" || waypointAction === "use";
       const path = findPathAStar(fromPos, waypointPos, requiresExactWaypoint ? 0 : null);
       if (path && path.length > 0) {
         const playerPos = fromPos;
@@ -1131,7 +1145,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const fromForFieldPath = normalizePosition(from);
       const waypointForFieldPath = normalizePosition(waypoint);
       if (fromForFieldPath && waypointForFieldPath && fromForFieldPath.z === waypointForFieldPath.z) {
-        const fieldPath = findPathAStar(fromForFieldPath, waypointForFieldPath, waypointAction === "ropeSpell" ? 0 : null);
+        const fieldPath = findPathAStar(fromForFieldPath, waypointForFieldPath, (waypointAction === "ropeSpell" || waypointAction === "use") ? 0 : null);
         if (pathContainsFireField(fieldPath) && stepAlongWalkOverFieldPath(fieldPath, fromForFieldPath)) {
           return true;
         }
@@ -1145,6 +1159,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     // native pathfinder can reject a hole as a movement destination even
     // when the tile reports walkable. When the player is one step away,
     // use the existing D-pad movement primitive for that single step.
+    if (waypointAction === "use" && stepOntoExactUseWaypoint(waypoint, from)) return true;
     try { window.gameClient?.world?.pathfinder?.findPath?.(from, to); state.lastPathAt = now; bot.log("cave pathing to waypoint", { ...waypoint, index: state.currentIndex + 1, total: route.length }); return true; }
     catch (error) { bot.log("cave pathing failed", { ...waypoint, error: error?.message || error }); return false; }
   }
