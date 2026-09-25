@@ -925,18 +925,45 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   const originalLoadPreset = bot.cave?.loadPreset?.bind(bot.cave);
   const originalSavePreset = bot.cave?.savePreset?.bind(bot.cave);
 
+  function getSelectedWaypointActionOptions(options = {}) {
+    const select = document.getElementById("minibia-bot-cave-waypoint-action");
+    const directionSelect = document.getElementById("minibia-bot-cave-use-direction");
+    const selectedAction = select?.value;
+    const action = selectedAction ? normalizeAction(selectedAction) : normalizeAction(options.action);
+    const useDirection = directionSelect?.value || options.useDirection;
+    return { action, useDirection };
+  }
+
   if (originalAddWaypoint) {
     bot.cave.addWaypoint = (waypoint, options = {}) => {
+      const selected = getSelectedWaypointActionOptions(options);
       const added = originalAddWaypoint(waypoint);
-      if (added) { setLastWaypointAction(options.action); if (options.action === useAction) setLastWaypointUseDirection(options.useDirection); }
+      if (added) {
+        setLastWaypointAction(selected.action);
+        if (selected.action === useAction) setLastWaypointUseDirection(selected.useDirection);
+        bot.log("cave waypoint recorded with action", {
+          index: bot.cave?.getRoute?.().length || 0,
+          action: selected.action,
+          useDirection: selected.action === useAction ? normalizeUseDirection(selected.useDirection) : null,
+        });
+      }
       return added;
     };
   }
 
   if (originalAddWaypointCurrentSpot) {
     bot.cave.addWaypointCurrentSpot = (options = {}) => {
+      const selected = getSelectedWaypointActionOptions(options);
       const added = originalAddWaypointCurrentSpot();
-      if (added) { setLastWaypointAction(options.action); if (options.action === useAction) setLastWaypointUseDirection(options.useDirection); }
+      if (added) {
+        setLastWaypointAction(selected.action);
+        if (selected.action === useAction) setLastWaypointUseDirection(selected.useDirection);
+        bot.log("cave waypoint recorded with action", {
+          index: bot.cave?.getRoute?.().length || 0,
+          action: selected.action,
+          useDirection: selected.action === useAction ? normalizeUseDirection(selected.useDirection) : null,
+        });
+      }
       return added;
     };
   }
