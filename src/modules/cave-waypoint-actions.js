@@ -49,6 +49,16 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     timerId: null,
     completedKey: null,
   };
+  const USE_WAYPOINT_SETTLE_MS = 100;
+  const useWaypointState = {
+    phase: "idle",
+    index: -1,
+    direction: "N",
+    waypointKey: null,
+    startedAt: 0,
+    useAt: 0,
+    resumeAt: 0,
+  };
 
   function normalizePresetName(value) {
     const normalized = String(value || "").trim().replace(/\s+/g, " ");
@@ -550,7 +560,82 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     });
   }
 
-  function useDirectionalUse(waypoint,direction){ const playerPosition=normalizePosition(bot.getPlayerPosition?.()); const targetPosition=getUseTargetPosition(waypoint,direction); if(!playerPosition||!targetPosition||getPositionKey(playerPosition)!==getPositionKey(waypoint))return false; const targetTile=getLoadedTiles().find(tile=>getPositionKey(getTilePosition(tile))===getPositionKey(targetPosition)); if(!targetTile)return false; const now=Date.now(); if(now-lastToolUseAt<250)return false; window.gameClient?.mouse?.use?.({which:targetTile,index:0xFF}); lastToolUseAt=now; bot.log("cave waypoint used adjacent tile",{direction:normalizeUseDirection(direction),waypoint,target:targetPosition}); return true; }
+  function resetUseWaypointState() {
+    useWaypointState.phase = "idle";
+    useWaypointState.index = -1;
+    useWaypointState.direction = "N";
+    useWaypointState.waypointKey = null;
+    useWaypointState.startedAt = 0;
+    useWaypointState.useAt = 0;
+    useWaypointState.resumeAt = 0;
+  }
+
+  function useDirectionalUse(waypoint, direction) {
+    const playerPosition = normalizePosition(bot.getPlayerPosition?.());
+    const waypointPosition = normalizePosition(waypoint);
+    const normalizedDirection = normalizeUseDirection(direction);
+    const targetPosition = getUseTargetPosition(waypointPosition, normalizedDirection);
+    if (!playerPosition || !waypointPosition || !targetPosition) return false;
+    if (getPositionKey(playerPosition) !== getPositionKey(waypointPosition)) return false;
+    const targetTile = getLoadedTiles().find(
+      (tile) => getPositionKey(getTilePosition(tile)) === getPositionKey(targetPosition)
+    );
+    if (!targetTile) return false;
+    const now = Date.now();
+    if (now - lastToolUseAt < 250) return false;
+    window.gameClient?.mouse?.use?.({ which: targetTile, index: 0xFF });
+    lastToolUseAt = now;
+    bot.log("cave Use waypoint used adjacent tile", { direction: normalizedDirection, waypoint: waypointPosition, target: targetPosition });
+    return true;
+  }
+
+  function runUseWaypoint(index, waypoint, playerPosition) {
+    if (!waypoint || !playerPosition) return false;
+    if (getPositionKey(playerPosition) !== getPositionKey(waypoint)) {
+      if (useWaypointState.index === index) resetUseWaypointState();
+      return false;
+    }
+    const waypointKey = getActivePresetName() + ":" + index + ":" + getPositionKey(waypoint);
+    const direction = normalizeUseDirection(getWaypointUseDirections()[index]);
+    const now = Date.now();
+
+    if (useWaypointState.index !== index || useWaypointState.waypointKey !== waypointKey || useWaypointState.direction !== direction) {
+      stopCurrentMovement();
+      useWaypointState.phase = "settleBeforeUse";
+      useWaypointState.index = index;
+      useWaypointState.direction = direction;
+      useWaypointState.waypointKey = waypointKey;
+      useWaypointState.startedAt = now;
+      useWaypointState.useAt = 0;
+      useWaypointState.resumeAt = 0;
+      bot.log("cave Use waypoint reached; settling before directional use", { index: index + 1, direction, waypoint, delayMs: USE_WAYPOINT_SETTLE_MS });
+      return true;
+    }
+
+    if (useWaypointState.phase === "settleBeforeUse") {
+      if (now - useWaypointState.startedAt < USE_WAYPOINT_SETTLE_MS) return true;
+      if (useDirectionalUse(waypoint, direction)) {
+        useWaypointState.phase = "settleAfterUse";
+        useWaypointState.useAt = now;
+        useWaypointState.resumeAt = now + USE_WAYPOINT_SETTLE_MS;
+        stopCurrentMovement();
+        bot.log("cave Use waypoint directional use sent; settling before continue", { index: index + 1, direction, delayMs: USE_WAYPOINT_SETTLE_MS });
+      }
+      return true;
+    }
+
+    if (useWaypointState.phase === "settleAfterUse") {
+      if (now - useWaypointState.useAt < USE_WAYPOINT_SETTLE_MS) return true;
+      const status = bot.cave?.status?.();
+      if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
+        bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+      }
+      bot.log("cave Use waypoint complete; continuing route", { index: index + 1, direction });
+      resetUseWaypointState();
+      return true;
+    }
+    return true;
+  }
 
   function useShovelOnNearestHole(preferredPosition = null) {
     return useToolOnNearestTarget({
@@ -688,8 +773,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       return;
     }
     if (action === useAction) {
-      if (!isAtWaypoint(playerPosition, waypoint)) return;
-      if (useDirectionalUse(waypoint, getWaypointUseDirections()[index])) bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+      runUseWaypoint(index, waypoint, playerPosition);
       return;
     }
 
@@ -793,6 +877,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     window.clearInterval(actionTimerId);
     clearWaitTimer();
     resetRopeSpellState();
+    resetUseWaypointState();
   });
 
   function installPanelControls() {
