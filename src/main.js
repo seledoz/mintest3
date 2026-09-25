@@ -418,6 +418,12 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
         const pathfinder = caveSection.querySelector("#minibia-bot-cave-pathfinder-mode")?.closest(".mb-field");
         if (pathfinder) pathfinder.insertAdjacentElement("beforebegin", field); else caveSection.querySelector(".mb-stack")?.appendChild(field);
       }
+      if (select && !select.querySelector('option[value="use"]')) {
+        const option = document.createElement("option");
+        option.value = "use";
+        option.textContent = "Use";
+        select.appendChild(option);
+      }
       if (!document.getElementById("minibia-bot-cave-haste-spell")) {
         const field=document.createElement("label"); field.className="mb-field"; field.id="minibia-bot-cave-haste-spell-field";
         const label=document.createElement("span"); label.className="mb-field-label"; label.textContent="Haste Spell";
