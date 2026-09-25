@@ -916,27 +916,12 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
 
   function isAtWaypoint(position, waypoint) {
-    if (!position || !waypoint || Number(position.z) !== Number(waypoint.z)) return false;
-
-    // Rope Spell waypoints are physical target tiles. Never let the normal
-    // waypoint tolerance (currently 1 tile) declare a Rope Spell waypoint
-    // reached while the player is still beside the hole. This must be enforced
-    // here as well as in the waypoint-action module because this is the CaveBot
-    // route-advance gate.
-    const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
-    const currentAction = bot.cave?.getWaypointActions?.()[currentIndex];
-    if (currentAction === "ropeSpell" || currentAction === "use") {
-      return (
-        Number(position.x) === Number(waypoint.x) &&
-        Number(position.y) === Number(waypoint.y) &&
-        Number(position.z) === Number(waypoint.z)
-      );
-    }
-
-    const tolerance = Math.max(1, Math.trunc(Number(config.waypointTolerance) || 0));
-    const dx = Math.abs(Number(position.x) - Number(waypoint.x));
-    const dy = Math.abs(Number(position.y) - Number(waypoint.y));
-    return dx <= tolerance && dy <= tolerance;
+    if (!position || !waypoint) return false;
+    return (
+      Number(position.x) === Number(waypoint.x) &&
+      Number(position.y) === Number(waypoint.y) &&
+      Number(position.z) === Number(waypoint.z)
+    );
   }
 
   function patchRopeSpellWaypointWalkability(waypoint) {
