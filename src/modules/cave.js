@@ -1135,6 +1135,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     }
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
     const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
+    const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
 
     // Game/Direct/native modes normally delegate the whole route to the
     // client pathfinder. When Walk Over Fields is enabled, build the same
@@ -1151,7 +1152,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         }
       }
     }
-    const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
     const fromPos = normalizePosition(from);
     const waypointPos = normalizePosition(waypoint);
 
