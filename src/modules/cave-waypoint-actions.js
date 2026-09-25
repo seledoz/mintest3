@@ -21,6 +21,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   const shovelAction = "shovel";
   const waitAction = "wait";
   const waitDurationMs = 60 * 1000;
+  const useDirectionStorageKey = "minibiaBot.cave.waypointUseDirections";
+  const useAction = "use";
+  const useDirections = new Set(["N","NE","E","SE","S","SW","W","NW"]);
   let lastToolUseAt = 0;
   let lastHandledKey = null;
   const ROPE_SPELL_RETRY_MS = 1000;
@@ -53,9 +56,16 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   }
 
   function normalizeAction(action) {
-    if (action === ropeAction || action === ropeSpellAction || action === hasteAction || action === shovelAction || action === waitAction) return action;
+    if (action === ropeAction || action === ropeSpellAction || action === hasteAction || action === shovelAction || action === waitAction || action === useAction) return action;
     return noopAction;
   }
+  function normalizeUseDirection(value) { const direction=String(value||"").trim().toUpperCase(); return useDirections.has(direction)?direction:"N"; }
+  function readAllUseDirections(){ const raw=bot.storage.get(useDirectionStorageKey,{}); return raw&&typeof raw==="object"&&!Array.isArray(raw)?raw:{}; }
+  function getPresetUseDirections(name=getActivePresetName()){ const all=readAllUseDirections(); const directions=all[normalizePresetName(name)]; return Array.isArray(directions)?directions.map(normalizeUseDirection):[]; }
+  function savePresetUseDirections(directions,name=getActivePresetName()){ const all=readAllUseDirections(); const routeLength=bot.cave?.getRoute?.().length||0; all[normalizePresetName(name)]=Array.from({length:routeLength},(_,index)=>normalizeUseDirection(directions[index])); bot.storage.set(useDirectionStorageKey,all); return all[normalizePresetName(name)].slice(); }
+  function getWaypointUseDirections(name=getActivePresetName()){ const routeLength=bot.cave?.getRoute?.().length||0; const directions=getPresetUseDirections(name); return Array.from({length:routeLength},(_,index)=>normalizeUseDirection(directions[index])); }
+  function setWaypointUseDirection(index,direction){ const routeLength=bot.cave?.getRoute?.().length||0; const normalizedIndex=Math.trunc(Number(index)); if(!Number.isFinite(normalizedIndex)||normalizedIndex<0||normalizedIndex>=routeLength)return null; const directions=getWaypointUseDirections(); directions[normalizedIndex]=normalizeUseDirection(direction); savePresetUseDirections(directions); return directions[normalizedIndex]; }
+  function setLastWaypointUseDirection(direction){ const routeLength=bot.cave?.getRoute?.().length||0; return routeLength?setWaypointUseDirection(routeLength-1,direction):null; }
 
   function getActivePresetName() {
     return normalizePresetName(bot.cave?.getActivePresetName?.());
@@ -84,6 +94,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     writeAllActions(allActions);
     return allActions[normalizePresetName(name)].slice();
   }
+
+  function getUseTargetPosition(waypoint,direction){ const normalized=normalizePosition(waypoint); if(!normalized)return null; const offsets={N:[0,-1],NE:[1,-1],E:[1,0],SE:[1,1],S:[0,1],SW:[-1,1],W:[-1,0],NW:[-1,-1]}; const o=offsets[normalizeUseDirection(direction)]||offsets.N; return {x:normalized.x+o[0],y:normalized.y+o[1],z:normalized.z}; }
 
   function getWaypointActions() {
     const routeLength = bot.cave?.getRoute?.().length || 0;
@@ -538,6 +550,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     });
   }
 
+  function useDirectionalUse(waypoint,direction){ const playerPosition=normalizePosition(bot.getPlayerPosition?.()); const targetPosition=getUseTargetPosition(waypoint,direction); if(!playerPosition||!targetPosition||getPositionKey(playerPosition)!==getPositionKey(waypoint))return false; const targetTile=getLoadedTiles().find(tile=>getPositionKey(getTilePosition(tile))===getPositionKey(targetPosition)); if(!targetTile)return false; const now=Date.now(); if(now-lastToolUseAt<250)return false; window.gameClient?.mouse?.use?.({which:targetTile,index:0xFF}); lastToolUseAt=now; bot.log("cave waypoint used adjacent tile",{direction:normalizeUseDirection(direction),waypoint,target:targetPosition}); return true; }
+
   function useShovelOnNearestHole(preferredPosition = null) {
     return useToolOnNearestTarget({
       action: shovelAction,
@@ -673,6 +687,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       if (isAtWaypoint(playerPosition, waypoint)) startWaypointWait(status, index, waypoint);
       return;
     }
+    if (action === useAction) {
+      if (!isAtWaypoint(playerPosition, waypoint)) return;
+      if (useDirectionalUse(waypoint, getWaypointUseDirections()[index])) bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+      return;
+    }
 
     const distance = distanceOnSameFloor(playerPosition, waypoint);
     if (!Number.isFinite(distance) || distance > 2) return;
@@ -708,7 +727,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   if (originalAddWaypoint) {
     bot.cave.addWaypoint = (waypoint, options = {}) => {
       const added = originalAddWaypoint(waypoint);
-      if (added) setLastWaypointAction(options.action);
+      if (added) { setLastWaypointAction(options.action); if (options.action === useAction) setLastWaypointUseDirection(options.useDirection); }
       return added;
     };
   }
@@ -716,7 +735,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   if (originalAddWaypointCurrentSpot) {
     bot.cave.addWaypointCurrentSpot = (options = {}) => {
       const added = originalAddWaypointCurrentSpot();
-      if (added) setLastWaypointAction(options.action);
+      if (added) { setLastWaypointAction(options.action); if (options.action === useAction) setLastWaypointUseDirection(options.useDirection); }
       return added;
     };
   }
@@ -724,7 +743,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   if (originalRemoveLastWaypoint) {
     bot.cave.removeLastWaypoint = () => {
       const removed = originalRemoveLastWaypoint();
-      if (removed) savePresetActions(getWaypointActions().slice(0, -1));
+      if (removed) { savePresetActions(getWaypointActions().slice(0, -1)); savePresetUseDirections(getWaypointUseDirections().slice(0, -1)); }
       return removed;
     };
   }
@@ -733,6 +752,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     bot.cave.clearWaypoints = () => {
       const result = originalClearWaypoints();
       savePresetActions([]);
+      savePresetUseDirections([]);
       return result;
     };
   }
@@ -740,7 +760,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   if (originalCreatePreset) {
     bot.cave.createPreset = (name) => {
       const result = originalCreatePreset(name);
-      if (result) savePresetActions([], result.name);
+      if (result) { savePresetActions([], result.name); savePresetUseDirections([], result.name); }
       return result;
     };
   }
@@ -748,7 +768,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   if (originalLoadPreset) {
     bot.cave.loadPreset = (name) => {
       const result = originalLoadPreset(name);
-      if (result) savePresetActions(getPresetActions(result.name), result.name);
+      if (result) { savePresetActions(getPresetActions(result.name), result.name); savePresetUseDirections(getPresetUseDirections(result.name), result.name); }
       return result;
     };
   }
@@ -756,7 +776,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   if (originalSavePreset) {
     bot.cave.savePreset = (name, options = {}) => {
       const result = originalSavePreset(name, options);
-      if (result) savePresetActions(getWaypointActions(), result.name);
+      if (result) { savePresetActions(getWaypointActions(), result.name); savePresetUseDirections(getWaypointUseDirections(), result.name); }
       return result;
     };
   }
@@ -799,6 +819,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
         [hasteAction, "Haste Waypoint"],
         [shovelAction, "Use Shovel"],
         [waitAction, "Waypoint Wait (1 Minute)"],
+        [useAction, "Use"],
       ].forEach(([value, text]) => {
         const option = document.createElement("option");
         option.value = value;
@@ -817,6 +838,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       option.textContent = "Rope Spell";
       select.appendChild(option);
     }
+
+    let useDirectionLabel=document.getElementById("minibia-bot-cave-use-direction")?.closest(".mb-field"); let useDirectionSelect=document.getElementById("minibia-bot-cave-use-direction");
+    if(!useDirectionSelect){useDirectionLabel=document.createElement("label");useDirectionLabel.className="mb-field";const t=document.createElement("span");t.className="mb-field-label";t.textContent="Use Direction";useDirectionSelect=document.createElement("select");useDirectionSelect.id="minibia-bot-cave-use-direction";[["N","North"],["NE","North-East"],["E","East"],["SE","South-East"],["S","South"],["SW","South-West"],["W","West"],["NW","North-West"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;useDirectionSelect.appendChild(o);});useDirectionLabel.appendChild(t);useDirectionLabel.appendChild(useDirectionSelect);select.closest(".mb-field")?.insertAdjacentElement("afterend",useDirectionLabel);}
+    const syncUseDirectionVisibility=()=>{const isUse=select.value===useAction;if(useDirectionLabel)useDirectionLabel.style.display=isUse?"":"none";};
+    if(useDirectionSelect&&!useDirectionSelect.__caveWaypointActionsUseBound){useDirectionSelect.addEventListener("change",()=>{if(select.value===useAction)setLastWaypointUseDirection(useDirectionSelect.value);});useDirectionSelect.__caveWaypointActionsUseBound=true;}
 
     let ropeSpellPendingHotkey = "";
     let ropeSpellHotkeyLabel = document.getElementById("minibia-bot-cave-rope-spell-hotkey")?.closest(".mb-field");
@@ -864,6 +890,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
     if (!select.__caveWaypointActionsRopeSpellChangeBound) {
       select.addEventListener("change", syncRopeSpellHotkeyVisibility);
+      select.addEventListener("change", syncUseDirectionVisibility);
       select.__caveWaypointActionsRopeSpellChangeBound = true;
     }
 
@@ -897,7 +924,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
     if (!select.__caveWaypointActionsHasteChangeBound) { select.addEventListener("change", syncHasteHotkeyVisibility); select.__caveWaypointActionsHasteChangeBound = true; }
     if (!recordButton.__caveWaypointActionsHasteClickBound) { recordButton.addEventListener("click", () => window.setTimeout(() => { if (select.value === hasteAction && hasteHotkeyInput) setWaypointHasteHotkey(hasteHotkeyInput.value); syncHasteHotkeyVisibility(); }, 0)); recordButton.__caveWaypointActionsHasteClickBound = true; }
-    syncRopeSpellHotkeyVisibility(); syncHasteHotkeyVisibility();
+    syncRopeSpellHotkeyVisibility(); syncHasteHotkeyVisibility(); syncUseDirectionVisibility();
     if (!document.getElementById("minibia-bot-cave-record-wait")) {
       const waitButton = document.createElement("button");
       waitButton.type = "button";
@@ -949,6 +976,10 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   }, 0);
 
   bot.cave.getWaypointActions = getWaypointActions;
+  bot.cave.getWaypointUseDirections = getWaypointUseDirections;
+  bot.cave.setWaypointUseDirection = setWaypointUseDirection;
+  bot.cave.setLastWaypointUseDirection = setLastWaypointUseDirection;
+  bot.cave.getWaypointUseTargetPosition = getUseTargetPosition;
   bot.cave.setWaypointAction = setWaypointAction;
   bot.cave.setLastWaypointAction = setLastWaypointAction;
   bot.cave.getWaypointRopeSpellHotkey = getWaypointRopeSpellHotkey;
@@ -959,7 +990,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   bot.cave.setWaypointHasteSpell = setWaypointHasteSpell;
   bot.cave.setLastWaypointHasteSpell = setLastWaypointHasteSpell;
   bot.cave.useRopeOnNearestHole = useRopeOnNearestHole;
-  bot.cave.isWaypointActionBlocking = (index) => getWaypointActions()[Math.trunc(Number(index) || 0)] === ropeSpellAction;
+  bot.cave.isWaypointActionBlocking = (index) => { const action=getWaypointActions()[Math.trunc(Number(index)||0)]; return action===ropeSpellAction || action===useAction; };
   bot.cave.useShovelOnNearestHole = useShovelOnNearestHole;
   bot.cave.waypointWaitStatus = () => ({
     active: waitState.active,
