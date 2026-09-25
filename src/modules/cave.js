@@ -58,7 +58,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     {
       tickMs: 200,
       repathMs: 1500,
-      waypointTolerance: 1,
       enabled: false,
       activePresetName: defaultPresetName,
       pathfinderMode: 'game',
@@ -67,7 +66,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     bot.storage.get(configStorageKey, {})
   );
   config.tickMs = 200;
-  config.waypointTolerance = Math.max(1, Math.trunc(Number(config.waypointTolerance) || 0));
   config.walkOverFields = !!config.walkOverFields;
 
   function normalizePresetName(value) {
@@ -392,20 +390,19 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       .filter(n => matrix.get(`${n.x},${n.y}`) === true);
   }
 
-  function getCachedPath(from, to, waypointTolerance = null) {
-    const tolerance = waypointTolerance == null ? "default" : String(Math.max(0, Math.trunc(Number(waypointTolerance) || 0)));
-    const key = [from.x, from.y, from.z, to.x, to.y, to.z, tolerance].join(",");
+  function getCachedPath(from, to) {
+    const key = [from.x, from.y, from.z, to.x, to.y, to.z].join(",");
     const entry = pathCache.get(key);
     if (entry && Date.now() - entry.at < PATHFINDER_CONFIG.pathCacheTTL) return entry.path;
     return null;
   }
 
-  function setCachedPath(from, to, path, waypointTolerance = null) {
-    const tolerance = waypointTolerance == null ? "default" : String(Math.max(0, Math.trunc(Number(waypointTolerance) || 0)));
-    const key = [from.x, from.y, from.z, to.x, to.y, to.z, tolerance].join(",");
+  function setCachedPath(from, to, path) {
+    const key = [from.x, from.y, from.z, to.x, to.y, to.z].join(",");
     pathCache.set(key, { path, at: Date.now() });
   }
-  function findPathAStar(from, to, waypointTolerance = null) {
+
+  function findPathAStar(from, to) {
     patchFieldWalkabilityForCavePathing();
     from = normalizePosition(from);
     to = normalizePosition(to);
@@ -413,18 +410,18 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (from.x === to.x && from.y === to.y && from.z === to.z) return [];
     if (from.z !== to.z) return null;
 
-    const cached = getCachedPath(from, to, waypointTolerance);
+    const cached = getCachedPath(from, to);
     if (cached) return cached;
 
     const matrix = getAStarWalkabilityMatrix(from, from.z);
-    const tolerance = waypointTolerance == null ? Math.max(1, Number(config.waypointTolerance) || 0) : Math.max(0, Math.trunc(Number(waypointTolerance) || 0));
+    const tolerance = 0;
     const path = aStarPath(from, to,
       (x, y) => matrix.get(`${x},${y}`) === true,
       (node) => getAStarNeighbors(node, matrix),
       tolerance
     );
 
-    if (path) setCachedPath(from, to, path, waypointTolerance);
+    if (path) setCachedPath(from, to, path);
     return path;
   }
 
@@ -1150,7 +1147,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
       const requiresExactWaypoint = waypointAction === "ropeSpell" || waypointAction === "use";
-      const path = findPathAStar(fromPos, waypointPos, requiresExactWaypoint ? 0 : null);
+      const path = findPathAStar(fromPos, waypointPos);
       if (path && path.length > 0) {
         const playerPos = fromPos;
 
@@ -1194,7 +1191,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const fromForFieldPath = normalizePosition(from);
       const waypointForFieldPath = normalizePosition(waypoint);
       if (fromForFieldPath && waypointForFieldPath && fromForFieldPath.z === waypointForFieldPath.z) {
-        const fieldPath = findPathAStar(fromForFieldPath, waypointForFieldPath, (waypointAction === "ropeSpell" || waypointAction === "use") ? 0 : null);
+        const fieldPath = findPathAStar(fromForFieldPath, waypointForFieldPath);
         if (pathContainsFireField(fieldPath) && stepAlongWalkOverFieldPath(fieldPath, fromForFieldPath)) {
           return true;
         }
@@ -1603,7 +1600,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function start(overrides = {}) {
     Object.assign(config, overrides, { enabled: true });
     config.tickMs = 200;
-    config.waypointTolerance = Math.max(1, Math.trunc(Number(config.waypointTolerance) || 0));
     persistConfig();
     if (!route.length) { bot.log("cave bot cannot start without waypoints"); return false; }
     if (state.running) { bot.log("cave bot already running"); return false; }
@@ -1708,7 +1704,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function updateConfig(nextConfig = {}) {
     Object.assign(config, nextConfig);
     config.tickMs = 200;
-    config.waypointTolerance = Math.max(1, Math.trunc(Number(config.waypointTolerance) || 0));
     config.walkOverFields = !!config.walkOverFields;
     persistConfig();
     bot.log("cave config updated", { ...config });
