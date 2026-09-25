@@ -963,16 +963,19 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     };
   }
 
-  const actionTimerId = window.setInterval(() => {
+  // CaveBot owns the main tick loop. Expose the action runner to that loop
+  // instead of relying on a separate timer, so Use waypoints cannot be skipped
+  // by timing/module-loop issues.
+  bot.cave.executeWaypointAction = () => {
     try {
-      runWaypointActionCheck();
+      return runWaypointActionCheck();
     } catch (error) {
       bot.log("cave waypoint action failed", error?.message || error);
+      return false;
     }
-  }, 100);
+  };
 
   bot.addCleanup(() => {
-    window.clearInterval(actionTimerId);
     clearWaitTimer();
     resetRopeSpellState();
     resetUseWaypointState();
