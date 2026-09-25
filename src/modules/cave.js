@@ -1518,14 +1518,19 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
       const blockingWaypointAction = !!bot.cave?.isWaypointActionBlocking?.(state.currentIndex);
       const exactWaypoint = !!position && position.x === waypoint.x && position.y === waypoint.y && position.z === waypoint.z;
+      // Action waypoints must never be auto-advanced by the normal
+      // tolerance check. Use/Rope Spell may intentionally require the
+      // player to be exactly on the waypoint tile.
       if (!blockingWaypointAction && isAtWaypoint(position, waypoint)) {
         const dist = getDistanceToWaypoint(position, waypoint);
         bot.logDebug("cave reached waypoint", { index: state.currentIndex + 1, waypoint, distance: Number.isFinite(dist) ? dist : null });
         waypoint = advanceWaypoint();
       }
       if (!waypoint) { bot.logDebug("cave no waypoint after advance, stopping"); return; }
-      if (blockingWaypointAction && exactWaypoint) {
-        bot.logDebug("cave holding exact Rope Spell waypoint", { index: state.currentIndex + 1, waypoint });
+      if (blockingWaypointAction) {
+        // The action runner owns this waypoint until it explicitly advances.
+        // Do not let the normal movement/pathfinder logic walk past it.
+        bot.logDebug("cave holding action waypoint", { index: state.currentIndex + 1, waypoint, exactWaypoint });
         return;
       }
       if (position && waypoint.z !== position.z) {
