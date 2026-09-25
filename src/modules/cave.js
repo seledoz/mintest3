@@ -1084,110 +1084,68 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     patchRopeSpellWaypointWalkability(waypoint);
     const from = bot.getPlayerPosition();
     if (!from || !waypoint) return false;
+
     const now = Date.now();
-    const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
-    const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
-
-    // Use waypoints must reach the exact waypoint. Do not force the route
-    // through CaveBot's A* matrix here: Game/Direct/native pathfinding already
-    // knows how to move through the normal map, while the final one-tile move
-    // is sent directly so the native pathfinder cannot stop at tolerance 1.
-    if (waypointAction === "use") {
-      const fromPos = normalizePosition(from);
-      const waypointPos = normalizePosition(waypoint);
-      if (!fromPos || !waypointPos || fromPos.z !== waypointPos.z) return false;
-
-      if (fromPos.x === waypointPos.x && fromPos.y === waypointPos.y) {
-        return false;
-      }
-
-      // Stage the native route two tiles at a time. Native pathfinding can
-      // stop within its own tolerance, so targeting the exact Use waypoint
-      // directly can leave the player permanently one tile short.
-      const usePath = findPathAStar(fromPos, waypointPos, 0);
-      if (usePath && usePath.length > 1) {
-        const nextIndex = usePath.length > 2 ? 2 : 1;
-        const nextPos = normalizePosition(usePath[nextIndex]);
-
-        if (nextPos && nextIndex === 1) {
-          const stepped = bot.caveArrowKeys?.stepToPosition?.(nextPos);
-          if (stepped) {
-            state.lastPathAt = now;
-            bot.logDebug("cave Use waypoint exact final step", { from: fromPos, to: nextPos, waypoint: waypointPos, pathfinderMode: config.pathfinderMode });
-            return true;
-          }
-        }
-
-        if (nextPos) {
-          try {
-            window.gameClient?.world?.pathfinder?.findPath?.(from, new Position(nextPos.x, nextPos.y, nextPos.z));
-            state.lastPathAt = now;
-            bot.logDebug("cave Use waypoint staged native path", { from: fromPos, target: nextPos, waypoint: waypointPos, remainingPathTiles: usePath.length - 1, pathfinderMode: config.pathfinderMode });
-            return true;
-          } catch (error) {
-            bot.log("cave Use waypoint staged path failed", { target: nextPos, waypoint: waypointPos, error: error?.message || error });
-          }
-        }
-      }
-
-      // Native fallback if CaveBot's local A* matrix cannot see the route.
-      try {
-        window.gameClient?.world?.pathfinder?.findPath?.(from, new Position(waypointPos.x, waypointPos.y, waypointPos.z));
-        state.lastPathAt = now;
-        bot.logDebug("cave Use waypoint native fallback", { from: fromPos, waypoint: waypointPos, pathfinderMode: config.pathfinderMode });
-        return true;
-      } catch (error) {
-        bot.log("cave Use waypoint pathing failed", { waypoint: waypointPos, error: error?.message || error });
-        return false;
-      }
-    }
-    // Rope Spell also keeps its existing exact final-tile behavior.
-    if (stepOntoExactRopeSpellWaypoint(waypoint, from)) return true;
 
     if (config.pathfinderMode === 'astar') {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
-      const requiresExactWaypoint = waypointAction === "ropeSpell" || waypointAction === "use";
       const path = findPathAStar(fromPos, waypointPos);
+
       if (path && path.length > 0) {
         const playerPos = fromPos;
-
-        // If Walk Over Fields is enabled and this route actually crosses a
-        // fire-field tile, do not give the route back to the native pathfinder.
-        // Follow the A* route one movement at a time so fire fields are
-        // treated like ordinary walkable tiles for the whole route.
-        if (pathContainsFireField(path) && stepAlongWalkOverFieldPath(path, playerPos)) {
-          return true;
-        }
-
         const waypointOnScreen = waypointPos && isOnScreen(waypointPos, playerPos);
         let targetTile = null;
-        if (waypointOnScreen) targetTile = waypointPos;
-        else {
+
+        if (waypointOnScreen) {
+          // Always pass the actual waypoint to the native pathfinder.
+          // Do not substitute an adjacent/staged destination.
+          targetTile = waypointPos;
+        } else {
           const visiblePath = filterPathToViewport(path, playerPos);
-          if (visiblePath && visiblePath.length > 1) targetTile = visiblePath[visiblePath.length - 1];
-          else if (visiblePath && visiblePath.length === 1) targetTile = visiblePath[0];
-          else targetTile = path[Math.min(VIEWPORT_DX, path.length - 1)];
+          if (visiblePath && visiblePath.length > 1) {
+            targetTile = visiblePath[visiblePath.length - 1];
+          } else if (visiblePath && visiblePath.length === 1) {
+            targetTile = visiblePath[0];
+          } else {
+            targetTile = path[Math.min(VIEWPORT_DX, path.length - 1)];
+          }
         }
+
         if (targetTile && !(targetTile.x === playerPos.x && targetTile.y === playerPos.y)) {
           const to = new Position(targetTile.x, targetTile.y, playerPos.z);
-
-          // The A* branch normally hands the next movement to the native
-          // pathfinder. For an exact Rope Spell waypoint, however, the
-          // native pathfinder can refuse the final hole tile. If we are one
-          // step away, use the existing direct D-pad primitive here as well
-          // (not only in the non-A* fallback below).
-          try { window.gameClient?.world?.pathfinder?.findPath?.(from, to); state.lastPathAt = now; return true; }
-          catch (error) { bot.log("cave A* pathing failed to target tile, falling back", { targetTile, error: error?.message || error }); }
+          try {
+            window.gameClient?.world?.pathfinder?.findPath?.(from, to);
+            state.lastPathAt = now;
+            bot.log("cave A* pathing to waypoint", {
+              ...waypoint,
+              index: state.currentIndex + 1,
+              total: route.length,
+              targetTile,
+              pathLength: path.length,
+              waypointOnScreen,
+            });
+            return true;
+          } catch (error) {
+            bot.log("cave A* pathing failed to target tile, falling back", {
+              targetTile,
+              error: error?.message || error,
+            });
+          }
         }
+      } else {
+        bot.log("cave A* pathfinding failed, falling back to game pathfinder", {
+          ...waypoint,
+          index: state.currentIndex + 1,
+          total: route.length,
+        });
       }
     }
+
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
-    // Game/Direct/native modes normally delegate the whole route to the
-    // client pathfinder. When Walk Over Fields is enabled, build the same
-    // CaveBot A* route first. If any tile on that route is a fire field,
-    // follow that route one tile at a time so intermediate fire fields and
-    // a fire-field destination use the same walkability rules as A*.
+
+    // Preserve the existing Walk Over Fields behavior without changing the
+    // destination. The waypoint itself remains the exact requested tile.
     if (config.walkOverFields) {
       const fromForFieldPath = normalizePosition(from);
       const waypointForFieldPath = normalizePosition(waypoint);
@@ -1198,16 +1156,23 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         }
       }
     }
-    const fromPos = normalizePosition(from);
-    const waypointPos = normalizePosition(waypoint);
 
-    // Rope Spell waypoints must physically reach the exact hole tile. The
-    // native pathfinder can reject a hole as a movement destination even
-    // when the tile reports walkable. When the player is one step away,
-    // use the existing D-pad movement primitive for that single step.
-    if (waypointAction === "use" && stepOntoExactUseWaypoint(waypoint, from)) return true;
-    try { window.gameClient?.world?.pathfinder?.findPath?.(from, to); state.lastPathAt = now; bot.log("cave pathing to waypoint", { ...waypoint, index: state.currentIndex + 1, total: route.length }); return true; }
-    catch (error) { bot.log("cave pathing failed", { ...waypoint, error: error?.message || error }); return false; }
+    try {
+      window.gameClient?.world?.pathfinder?.findPath?.(from, to);
+      state.lastPathAt = now;
+      bot.log("cave pathing to waypoint", {
+        ...waypoint,
+        index: state.currentIndex + 1,
+        total: route.length,
+      });
+      return true;
+    } catch (error) {
+      bot.log("cave pathing failed", {
+        ...waypoint,
+        error: error?.message || error,
+      });
+      return false;
+    }
   }
 
   function goToPosition(position) { if (!position) return false; return goToWaypoint(position); }
