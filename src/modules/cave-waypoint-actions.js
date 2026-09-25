@@ -577,15 +577,54 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const targetPosition = getUseTargetPosition(waypointPosition, normalizedDirection);
     if (!playerPosition || !waypointPosition || !targetPosition) return false;
     if (getPositionKey(playerPosition) !== getPositionKey(waypointPosition)) return false;
+
     const targetTile = getLoadedTiles().find(
       (tile) => getPositionKey(getTilePosition(tile)) === getPositionKey(targetPosition)
     );
-    if (!targetTile) return false;
+    if (!targetTile) {
+      bot.log("cave Use waypoint waiting for directional target tile", {
+        direction: normalizedDirection,
+        waypoint: waypointPosition,
+        target: targetPosition,
+      });
+      return false;
+    }
+
     const now = Date.now();
     if (now - lastToolUseAt < 250) return false;
-    window.gameClient?.mouse?.use?.({ which: targetTile, index: 0xFF });
+
+    const mouse = window.gameClient?.mouse;
+    let sent = false;
+
+    // Use the same low-level item-use path already used successfully by
+    // rope/shovel actions. Prefer the client's public mouse.use API when it
+    // exists, but only consider the action successful when an actual handler
+    // is available.
+    if (typeof mouse?.use === "function") {
+      mouse.use({ which: targetTile, index: 0xFF });
+      sent = true;
+    } else if (typeof mouse?.__handleItemUseWith === "function") {
+      mouse.__handleItemUseWith(
+        { which: targetTile, index: 0xFF },
+        { which: targetTile, index: 0xFF }
+      );
+      sent = true;
+    }
+
+    if (!sent) {
+      bot.log("cave Use waypoint failed: no tile-use handler available", {
+        direction: normalizedDirection,
+        target: targetPosition,
+      });
+      return false;
+    }
+
     lastToolUseAt = now;
-    bot.log("cave Use waypoint used adjacent tile", { direction: normalizedDirection, waypoint: waypointPosition, target: targetPosition });
+    bot.log("cave Use waypoint used adjacent tile", {
+      direction: normalizedDirection,
+      waypoint: waypointPosition,
+      target: targetPosition,
+    });
     return true;
   }
 
