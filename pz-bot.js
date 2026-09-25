@@ -219,7 +219,7 @@
     }
   }
   async function loadSourceFile(path){
-    const sourceBaseUrl = path === "src/modules/cave-waypoint-actions.js" ? rawBaseUrl : rawBaseUrl;
+    const sourceBaseUrl = rawBaseUrl;
     const url=`${sourceBaseUrl}/${path}?t=${Date.now()}-${Math.random()}`;
     const response=await fetch(url,{cache:"no-store"});
     if(!response.ok)throw new Error(`Failed to load ${path}: HTTP ${response.status}`);
