@@ -1507,6 +1507,15 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       }
       let waypoint = getCurrentWaypoint();
       if (!waypoint) { stop(); return; }
+
+      // Waypoint actions, especially Use, must run from the CaveBot's
+      // authoritative tick so movement and action execution cannot race.
+      const waypointActionRunner = bot.cave?.executeWaypointAction;
+      if (typeof waypointActionRunner === "function") {
+        const actionHandled = waypointActionRunner();
+        if (actionHandled) return;
+      }
+
       const blockingWaypointAction = !!bot.cave?.isWaypointActionBlocking?.(state.currentIndex);
       const exactWaypoint = !!position && position.x === waypoint.x && position.y === waypoint.y && position.z === waypoint.z;
       if (!blockingWaypointAction && isAtWaypoint(position, waypoint)) {
