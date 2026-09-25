@@ -575,6 +575,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const waypointPosition = normalizePosition(waypoint);
     const normalizedDirection = normalizeUseDirection(direction);
     const targetPosition = getUseTargetPosition(waypointPosition, normalizedDirection);
+    try { console.warn("[CAVEBOT USE TRACE] dispatch entered", { waypointPosition, playerPosition, normalizedDirection, targetPosition }); } catch (_) {}
+    bot.log("CAVEBOT USE TRACE: dispatch entered", { waypointPosition, playerPosition, normalizedDirection, targetPosition });
     if (!playerPosition || !waypointPosition || !targetPosition) return false;
     if (getPositionKey(playerPosition) !== getPositionKey(waypointPosition)) return false;
 
@@ -853,6 +855,22 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
 
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
+    if (action === useAction) {
+      // Hard trace: this must appear whenever the Cavebot reaches a Use
+      // waypoint. It tells us whether the action is actually being selected
+      // before we investigate the mouse/tile dispatch.
+      const trace = {
+        index: index + 1,
+        action,
+        preset: getActivePresetName(),
+        waypoint,
+        playerPosition,
+        direction: normalizeUseDirection(getWaypointUseDirections()[index]),
+        exact: getPositionKey(playerPosition) === getPositionKey(waypoint),
+      };
+      try { console.warn("[CAVEBOT USE TRACE] action selected", trace); } catch (_) {}
+      bot.log("CAVEBOT USE TRACE: action selected", trace);
+    }
     if (action !== ropeSpellAction && ropeSpellState.active && ropeSpellState.index === index) {
       ropeSpellState.active = false;
       ropeSpellState.index = -1;
