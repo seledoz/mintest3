@@ -1089,30 +1089,56 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const currentIndex = Math.trunc(Number(state.currentIndex) || 0);
     const waypointAction = bot.cave?.getWaypointActions?.()[currentIndex];
 
-    // Use waypoints must never use waypointTolerance. For every pathfinder
-    // mode, build an exact (zero-tolerance) CaveBot A* route and advance only
-    // one tile at a time. This guarantees the player reaches the actual Use
-    // waypoint before the Use action fires.
+    // Use waypoints must reach the exact waypoint. Do not force the route
+    // through CaveBot's A* matrix here: Game/Direct/native pathfinding already
+    // knows how to move through the normal map, while the final one-tile move
+    // is sent directly so the native pathfinder cannot stop at tolerance 1.
     if (waypointAction === "use") {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
-      if (fromPos && waypointPos && fromPos.z === waypointPos.z) {
-        const usePath = findPathAStar(fromPos, waypointPos, 0);
-        if (usePath && usePath.length > 1) {
-          const stepped = bot.caveArrowKeys?.stepToPosition?.(normalizePosition(usePath[1]));
-          if (stepped) {
-            state.lastPathAt = now;
-            bot.logDebug("cave Use waypoint exact-tile step", {
-              from: fromPos,
-              to: normalizePosition(usePath[1]),
-              waypoint: waypointPos,
-              pathfinderMode: config.pathfinderMode,
-            });
-            return true;
-          }
+      if (!fromPos || !waypointPos || fromPos.z !== waypointPos.z) return false;
+
+      if (fromPos.x === waypointPos.x && fromPos.y === waypointPos.y) {
+        return false;
+      }
+
+      const distance = Math.max(
+        Math.abs(fromPos.x - waypointPos.x),
+        Math.abs(fromPos.y - waypointPos.y)
+      );
+
+      if (distance === 1) {
+        const stepped = bot.caveArrowKeys?.stepToPosition?.(waypointPos);
+        if (stepped) {
+          state.lastPathAt = now;
+          bot.logDebug("cave Use waypoint exact final step", {
+            from: fromPos,
+            to: waypointPos,
+            pathfinderMode: config.pathfinderMode,
+          });
+          return true;
         }
       }
-      return false;
+
+      try {
+        window.gameClient?.world?.pathfinder?.findPath?.(
+          from,
+          new Position(waypointPos.x, waypointPos.y, waypointPos.z)
+        );
+        state.lastPathAt = now;
+        bot.logDebug("cave Use waypoint native exact destination", {
+          from: fromPos,
+          waypoint: waypointPos,
+          pathfinderMode: config.pathfinderMode,
+        });
+        return true;
+      } catch (error) {
+        bot.log("cave Use waypoint pathing failed", {
+          waypoint: waypointPos,
+          error: error?.message || error,
+        });
+        return false;
+      }
     }
 
     // Rope Spell also keeps its existing exact final-tile behavior.
