@@ -189,7 +189,7 @@ window.__minibiaBotBundle.installPanel = function installPanel(bot) {
     if (!existingBody) {
       const moduleBody = document.createElement("div");
       moduleBody.className = "mb-module-body";
-      const children = Array.from(section.children).filter((child) => child !== title);
+      const children = Array.from(section.children).filter((child) => child !== title && child !== titleBar);
       children.forEach((child) => moduleBody.appendChild(child));
       section.appendChild(moduleBody);
     }
