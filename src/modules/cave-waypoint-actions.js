@@ -987,8 +987,28 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   // by timing/module-loop issues.
   bot.cave.executeWaypointAction = () => {
     try {
+      const status = bot.cave?.status?.();
+      const route = bot.cave?.getRoute?.() || [];
+      const index = Math.trunc(Number(status?.currentIndex) || 0);
+      const actions = getWaypointActions();
+      const action = actions[index];
+      // Diagnostic trace at the boundary between CaveBot's movement loop and
+      // the waypoint-action module. If this never appears, the action module
+      // is not being called by the live CaveBot runtime.
+      if (status?.running) {
+        const trace = {
+          running: !!status.running,
+          index: index + 1,
+          action,
+          routeLength: route.length,
+          preset: getActivePresetName(),
+        };
+        try { console.warn("[CAVEBOT ACTION RUNNER TRACE]", trace); } catch (_) {}
+        bot.log("CAVEBOT ACTION RUNNER TRACE", trace);
+      }
       return runWaypointActionCheck();
     } catch (error) {
+      try { console.error("[CAVEBOT ACTION RUNNER ERROR]", error); } catch (_) {}
       bot.log("cave waypoint action failed", error?.message || error);
       return false;
     }
