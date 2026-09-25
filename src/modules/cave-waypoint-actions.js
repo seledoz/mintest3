@@ -853,21 +853,6 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
     if (action === useAction) {
-      // Hard trace: this must appear whenever the Cavebot reaches a Use
-      // waypoint. It tells us whether the action is actually being selected
-      // before we investigate the mouse/tile dispatch.
-      const trace = {
-        index: index + 1,
-        action,
-        preset: getActivePresetName(),
-        waypoint,
-        playerPosition,
-        direction: normalizeUseDirection(getWaypointUseDirections()[index]),
-        exact: getPositionKey(playerPosition) === getPositionKey(waypoint),
-      };
-      try { console.warn("[CAVEBOT USE TRACE] action selected", trace); } catch (_) {}
-      bot.log("CAVEBOT USE TRACE: action selected", trace);
-    }
     if (action !== ropeSpellAction && ropeSpellState.active && ropeSpellState.index === index) {
       ropeSpellState.active = false;
       ropeSpellState.index = -1;
@@ -1016,20 +1001,6 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       const index = Math.trunc(Number(status?.currentIndex) || 0);
       const actions = getWaypointActions();
       const action = actions[index];
-      // Diagnostic trace at the boundary between CaveBot's movement loop and
-      // the waypoint-action module. If this never appears, the action module
-      // is not being called by the live CaveBot runtime.
-      if (status?.running) {
-        const trace = {
-          running: !!status.running,
-          index: index + 1,
-          action,
-          routeLength: route.length,
-          preset: getActivePresetName(),
-        };
-        try { console.warn("[CAVEBOT ACTION RUNNER TRACE]", trace); } catch (_) {}
-        bot.log("CAVEBOT ACTION RUNNER TRACE", trace);
-      }
       return runWaypointActionCheck();
     } catch (error) {
       try { console.error("[CAVEBOT ACTION RUNNER ERROR]", error); } catch (_) {}
