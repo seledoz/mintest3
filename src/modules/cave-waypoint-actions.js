@@ -74,10 +74,27 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   }
   function normalizeUseDirection(value) { const direction=String(value||"").trim().toUpperCase(); return useDirections.has(direction)?direction:"N"; }
   function readAllUseDirections(){ const raw=bot.storage.get(useDirectionStorageKey,{}); return raw&&typeof raw==="object"&&!Array.isArray(raw)?raw:{}; }
-  function getPresetUseDirections(name=getActivePresetName()){ const all=readAllUseDirections(); const directions=all[normalizePresetName(name)]; return Array.isArray(directions)?directions.map(normalizeUseDirection):[]; }
+  function getPresetUseDirections(name=getActivePresetName()){
+    const all=readAllUseDirections();
+    const directions=all[normalizePresetName(name)];
+    const stored = Array.isArray(directions) ? directions.map(normalizeUseDirection) : [];
+    const route = bot.cave?.getRoute?.() || [];
+    return Array.from({length: route.length}, (_, index) =>
+      normalizeUseDirection(stored[index] || route[index]?.useDirection)
+    );
+  }
   function savePresetUseDirections(directions,name=getActivePresetName()){ const all=readAllUseDirections(); const routeLength=bot.cave?.getRoute?.().length||0; all[normalizePresetName(name)]=Array.from({length:routeLength},(_,index)=>normalizeUseDirection(directions[index])); bot.storage.set(useDirectionStorageKey,all); return all[normalizePresetName(name)].slice(); }
   function getWaypointUseDirections(name=getActivePresetName()){ const routeLength=bot.cave?.getRoute?.().length||0; const directions=getPresetUseDirections(name); return Array.from({length:routeLength},(_,index)=>normalizeUseDirection(directions[index])); }
-  function setWaypointUseDirection(index,direction){ const routeLength=bot.cave?.getRoute?.().length||0; const normalizedIndex=Math.trunc(Number(index)); if(!Number.isFinite(normalizedIndex)||normalizedIndex<0||normalizedIndex>=routeLength)return null; const directions=getWaypointUseDirections(); directions[normalizedIndex]=normalizeUseDirection(direction); savePresetUseDirections(directions); return directions[normalizedIndex]; }
+  function setWaypointUseDirection(index,direction){
+    const routeLength=bot.cave?.getRoute?.().length||0;
+    const normalizedIndex=Math.trunc(Number(index));
+    if(!Number.isFinite(normalizedIndex)||normalizedIndex<0||normalizedIndex>=routeLength)return null;
+    const directions=getWaypointUseDirections();
+    directions[normalizedIndex]=normalizeUseDirection(direction);
+    savePresetUseDirections(directions);
+    bot.cave?.setWaypointMetadata?.(normalizedIndex, { useDirection: directions[normalizedIndex] });
+    return directions[normalizedIndex];
+  }
   function setLastWaypointUseDirection(direction){ const routeLength=bot.cave?.getRoute?.().length||0; return routeLength?setWaypointUseDirection(routeLength-1,direction):null; }
 
   function getActivePresetName() {
@@ -125,7 +142,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       if (key && byPosition && Object.prototype.hasOwnProperty.call(byPosition, key)) {
         return normalizeAction(byPosition[key]);
       }
-      return normalizeAction(actions[index]);
+      return normalizeAction(actions[index] || route[index]?.action);
     });
   }
 
@@ -268,6 +285,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const actions = getWaypointActions();
     actions[normalizedIndex] = normalizeAction(action);
     savePresetActions(actions);
+    bot.cave?.setWaypointMetadata?.(normalizedIndex, { action: actions[normalizedIndex] });
     bot.log("cave waypoint action updated", {
       index: normalizedIndex + 1,
       waypoint: bot.cave?.getRoute?.()[normalizedIndex],
