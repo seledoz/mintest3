@@ -1018,9 +1018,17 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   function getSelectedWaypointActionOptions(options = {}) {
     const select = document.getElementById("minibia-bot-cave-waypoint-action");
     const directionSelect = document.getElementById("minibia-bot-cave-use-direction");
-    const selectedAction = select?.value;
-    const action = selectedAction ? normalizeAction(selectedAction) : normalizeAction(options.action);
-    const useDirection = directionSelect?.value || options.useDirection;
+    // When CaveBot is loading a saved route, the caller supplies the
+    // persisted action explicitly. Do not let the visible UI dropdown
+    // (which may still be set to Walk) overwrite that saved action.
+    const hasExplicitAction = options && Object.prototype.hasOwnProperty.call(options, "action");
+    const action = hasExplicitAction
+      ? normalizeAction(options.action)
+      : normalizeAction(select?.value);
+    const hasExplicitUseDirection = options && Object.prototype.hasOwnProperty.call(options, "useDirection");
+    const useDirection = hasExplicitUseDirection
+      ? normalizeUseDirection(options.useDirection)
+      : normalizeUseDirection(directionSelect?.value);
     return { action, useDirection };
   }
 
