@@ -836,14 +836,18 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
   function getWaypointCanvasPoint(waypoint, viewport, playerPosition, minimap) {
     if (!waypoint || !viewport || !playerPosition || !minimap) return null;
-    if (waypoint.z !== minimap.__renderLayer) return null;
-    const zoomScale = 1 << (Number(minimap.__zoomLevel) || 0);
-    const center = minimap.center || { x: 0, y: 0 };
+    const renderLayer = Number(minimap.__renderLayer);
+    if (Number.isFinite(renderLayer) && waypoint.z !== renderLayer) return null;
+    const zoomLevel = Number(minimap.__zoomLevel);
+    const zoomScale = Number.isFinite(zoomLevel) && zoomLevel >= 0 ? Math.pow(2, zoomLevel) : 1;
     const internalWidth = Number(viewport.canvas.width) || 160;
     const internalHeight = Number(viewport.canvas.height) || 160;
-    const internalX = (internalWidth / 2) + (waypoint.x - playerPosition.x - Number(center.x || 0)) * zoomScale;
-    const internalY = (internalHeight / 2) + (waypoint.y - playerPosition.y - Number(center.y || 0)) * zoomScale;
-    return { x: internalX * (viewport.rect.width / internalWidth), y: internalY * (viewport.rect.height / internalHeight) };
+    const internalX = (internalWidth / 2) + (waypoint.x - playerPosition.x) * zoomScale;
+    const internalY = (internalHeight / 2) + (waypoint.y - playerPosition.y) * zoomScale;
+    return {
+      x: internalX * (viewport.rect.width / internalWidth),
+      y: internalY * (viewport.rect.height / internalHeight),
+    };
   }
   function renderMinimapOverlay() {
     const viewport = getMinimapViewport();
