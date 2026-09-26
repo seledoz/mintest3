@@ -1757,6 +1757,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const shouldPersistEnabled = options.persistEnabled !== false;
     state.running = false;
     if (state.timerId != null) { window.clearTimeout(state.timerId); state.timerId = null; }
+    stopObserver();
+    stopMinimapOverlay();
     if (shouldPersistEnabled) { config.enabled = false; persistConfig(); }
     state.pausedForCombat = false;
     state.ropeLockedTarget = null;
