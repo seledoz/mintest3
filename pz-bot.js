@@ -228,6 +228,13 @@
     const sourceUrl=`${rawBaseUrl}/${path}`;
     const evaluate=(source)=>{try{new Function(source);(0,eval)(`${source}\n//# sourceURL=${sourceUrl}`);return null;}catch(error){return error;}};
     let code=addSafeUiPerformanceOptimizations(rawCode,path);
+    // Runtime guard for stale cached cave.js copies: the rope observer previously
+    // used previousPosition after the local variable was renamed to previous.
+    // Normalize that legacy identifier before evaluation so an old CDN/browser
+    // response cannot crash the CaveBot observer.
+    if (path === "src/modules/cave.js") {
+      code = code.replaceAll("previousPosition", "previous");
+    }
     if(path==="src/version.js")code=code.replaceAll("%%BRANCH%%",ref).replaceAll("%%COMMIT%%","source-loader").replaceAll("%%DATE%%",new Date().toISOString());
     let error=evaluate(code);
     if(error&&code!==rawCode){console.warn(`[minibia-bot] ${path} transformed source failed; retrying original source`,error);error=evaluate(rawCode);}
