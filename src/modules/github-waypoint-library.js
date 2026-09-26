@@ -233,7 +233,26 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     const scriptName = String(name || bot.cave?.getActivePresetName?.() || "").trim().replace(/\s+/g, " ");
     if (!scriptName) throw new Error("Script name missing");
 
-    const route = normalizeRoute(bot.cave?.getRoute?.() || []);
+    // The CaveBot action module keeps legacy action/direction sidecars in
+    // browser storage. Merge those values into the route before saving so a
+    // Use waypoint can never be serialized as plain Walk just because its
+    // embedded metadata was temporarily missing.
+    const rawRoute = bot.cave?.getRoute?.() || [];
+    const actions = typeof bot.cave?.getWaypointActions === "function"
+      ? bot.cave.getWaypointActions()
+      : [];
+    const useDirections = typeof bot.cave?.getWaypointUseDirections === "function"
+      ? bot.cave.getWaypointUseDirections()
+      : [];
+    const route = normalizeRoute(rawRoute).map((waypoint, index) => {
+      const action = typeof actions[index] === "string" ? actions[index].trim() : "";
+      const useDirection = typeof useDirections[index] === "string" ? useDirections[index].trim().toUpperCase() : "";
+      return {
+        ...waypoint,
+        ...(action ? { action } : {}),
+        ...(useDirection ? { useDirection } : {}),
+      };
+    });
     const transitions = normalizeTransitions(bot.cave?.getTransitions?.() || []);
     if (!route.length) throw new Error("No waypoints to save");
 
