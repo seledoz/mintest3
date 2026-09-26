@@ -135,15 +135,15 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const byPosition = readAllPositionActions()[presetName];
     const route = bot.cave?.getRoute?.() || [];
 
-    // Prefer the position-bound action when available. This prevents a Use
-    // action from changing meaning when the route index moves during a lap
-    // or when a preset is reloaded.
+    // The route's embedded action is authoritative. Position/index storage
+    // remains as a backward-compatible fallback for older saved presets.
     return Array.from({ length: route.length }, (_, index) => {
+      if (route[index]?.action) return normalizeAction(route[index].action);
       const key = getWaypointPositionKey(route[index]);
       if (key && byPosition && Object.prototype.hasOwnProperty.call(byPosition, key)) {
         return normalizeAction(byPosition[key]);
       }
-      return normalizeAction(route[index]?.action || actions[index]);
+      return normalizeAction(actions[index]);
     });
   }
 
