@@ -256,7 +256,11 @@
       code = code.replaceAll("previousPosition", "previous");
     }
     if(path==="src/version.js")code=code.replaceAll("%%BRANCH%%",ref).replaceAll("%%COMMIT%%","source-loader").replaceAll("%%DATE%%",new Date().toISOString());
-    // A newer loader can start while this source is being transformed.\n    // Re-check immediately before eval so an older loader can never execute\n    // a module after ownership has moved to the newer loader.\n    if (!isCurrentLoader()) throw new Error("stale Minibia loader aborted");\n    let error=evaluate(code);
+    // A newer loader can start while this source is being transformed.
+    // Re-check immediately before eval so an older loader can never execute
+    // a module after ownership has moved to the newer loader.
+    if (!isCurrentLoader()) throw new Error("stale Minibia loader aborted");
+    let error=evaluate(code);
     if(error&&code!==rawCode){console.warn(`[minibia-bot] ${path} transformed source failed; retrying original source`,error);error=evaluate(rawCode);}
     if(error&&path==="src/modules/cave-waypoint-actions.js"){
       const fallbackUrl="https://raw.githubusercontent.com/seledoz/mintest3/2f0938a7c745bd819fa22aa008d50628a2472e49/src/modules/cave-waypoint-actions.js";
