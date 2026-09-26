@@ -1,6 +1,14 @@
 window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
+  // Every CaveBot module load gets a new generation. Old timer callbacks can
+  // survive a reload long enough to fire once; generation checks make those
+  // stale callbacks harmless even if the previous instance was not destroyed.
+  const caveRuntime = window.__minibiaCaveRuntime || { generation: 0 };
+  caveRuntime.generation += 1;
+  window.__minibiaCaveRuntime = caveRuntime;
+  const caveGeneration = caveRuntime.generation;
+  const isCurrentCaveGeneration = () => window.__minibiaCaveRuntime?.generation === caveGeneration;
   // Remove the old waypoint-tolerance pathfinder wrapper if it is still
   // present in the current game runtime from an earlier module load.
   // This restores the native pathfinder for every CaveBot pathing mode.
@@ -1590,11 +1598,11 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return nextWaypoint;
   }
   function scheduleNextTick() {
-    if (!state.running) return;
+    if (!isCurrentCaveGeneration() || !state.running) return;
     state.timerId = window.setTimeout(() => tick(), config.tickMs);
   }
   function tick() {
-    if (!state.running) return;
+    if (!isCurrentCaveGeneration() || !state.running) return;
     try {
       observePosition();
       cleanupPathCache();
