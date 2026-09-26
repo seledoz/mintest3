@@ -3,7 +3,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installGithubWaypointLibraryModule(bot) {
   const repoOwner = "seledoz";
   const repoName = "mintest3";
-  const branch = "main";
+  const branch = "bot-waypoints";
   const waypointDirectory = "waypoints";
   const tokenStorageKey = "minibiaBot.github.token";
   const statusStorageKey = "minibiaBot.githubWaypointLibrary.lastStatus";
@@ -153,13 +153,49 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     return new TextDecoder().decode(Uint8Array.from(atob(String(text || "").replace(/\s/g, "")), (char) => char.charCodeAt(0)));
   }
 
-  function getHeaders(value = getToken()) {
+  function getHeaders(value = "") {
     const headers = {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
     };
     if (value) headers.Authorization = `Bearer ${value}`;
     return headers;
+  }
+
+  async function ensureWaypointBranch() {
+    const value = getToken();
+    if (!value) throw new Error("Save GitHub Setup first");
+
+    const refUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/git/ref/heads/${encodeURIComponent(branch)}`;
+    const existing = await fetch(refUrl, { headers: getHeaders(value), cache: "no-store" });
+    if (existing.ok) return true;
+    if (existing.status !== 404) {
+      let details = "";
+      try { const data = await existing.json(); details = data?.message ? ` - ${data.message}` : ""; } catch (error) {}
+      throw new Error(`GitHub branch check failed: HTTP ${existing.status}${details}`);
+    }
+
+    const baseResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/ref/heads/main`, {
+      headers: getHeaders(value), cache: "no-store"
+    });
+    if (!baseResponse.ok) {
+      let details = "";
+      try { const data = await baseResponse.json(); details = data?.message ? ` - ${data.message}` : ""; } catch (error) {}
+      throw new Error(`GitHub main branch lookup failed: HTTP ${baseResponse.status}${details}`);
+    }
+    const baseData = await baseResponse.json();
+
+    const createResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/refs`, {
+      method: "POST",
+      headers: { ...getHeaders(value), "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: baseData.object?.sha }),
+    });
+    if (!createResponse.ok) {
+      let details = "";
+      try { const data = await createResponse.json(); details = data?.message ? ` - ${data.message}` : ""; } catch (error) {}
+      throw new Error(`GitHub waypoint branch creation failed: HTTP ${createResponse.status}${details}`);
+    }
+    return true;
   }
 
   async function fetchJson(url, options = {}) {
@@ -260,6 +296,7 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     if (!route.length) throw new Error("No waypoints to save");
 
     const path = getScriptPath(scriptName);
+    await ensureWaypointBranch();
     const { sha } = await fetchFileForWrite(path);
     const script = { version: 1, name: scriptName, updatedAt: new Date().toISOString(), route, transitions };
     await writeScriptFile(path, script, sha);
