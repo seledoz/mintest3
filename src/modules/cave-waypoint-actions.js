@@ -135,15 +135,19 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const byPosition = readAllPositionActions()[presetName];
     const route = bot.cave?.getRoute?.() || [];
 
-    // The route's embedded action is authoritative. Position/index storage
-    // remains as a backward-compatible fallback for older saved presets.
+    // Prefer an explicitly configured route action. If older route data lost
+    // its embedded metadata, preserve a non-walk action from the sidecar
+    // storage instead of silently converting it back to Walk on a later lap.
     return Array.from({ length: route.length }, (_, index) => {
-      if (route[index]?.action) return normalizeAction(route[index].action);
+      const embedded = normalizeAction(route[index]?.action);
       const key = getWaypointPositionKey(route[index]);
-      if (key && byPosition && Object.prototype.hasOwnProperty.call(byPosition, key)) {
-        return normalizeAction(byPosition[key]);
-      }
-      return normalizeAction(actions[index]);
+      const positioned = key && byPosition && Object.prototype.hasOwnProperty.call(byPosition, key)
+        ? normalizeAction(byPosition[key])
+        : normalizeAction(actions[index]);
+
+      if (embedded !== noopAction) return embedded;
+      if (positioned !== noopAction) return positioned;
+      return embedded;
     });
   }
 
@@ -165,6 +169,16 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     });
     allPositionActions[presetName] = byPosition;
     writeAllPositionActions(allPositionActions);
+
+    // Keep the action embedded in the route as well as in the legacy
+    // sidecar stores. This makes the action survive Save/Load and repeated
+    // traversal of the same route without changing from Use back to Walk.
+    route.forEach((waypoint, index) => {
+      bot.cave?.setWaypointMetadata?.(index, {
+        action: normalized[index],
+      });
+    });
+
     return normalized.slice();
   }
 
