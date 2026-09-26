@@ -26,6 +26,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   const useAction = "use";
   const useDirections = new Set(["N","NE","E","SE","S","SW","W","NW"]);
   let lastToolUseAt = 0;
+  let lastUseWaypointUseAt = 0;
   let lastHandledKey = null;
   const ROPE_SPELL_RETRY_MS = 1000;
   const ROPE_SPELL_MAX_WAIT_MS = 5000;
@@ -659,7 +660,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
 
     const now = Date.now();
-    if (now - lastToolUseAt < 250) return false;
+    if (now - lastUseWaypointUseAt < 250) return false;
 
     const mouse = window.gameClient?.mouse;
     const targetRef = { which: targetTile, index: 0xFF };
@@ -714,7 +715,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       return false;
     }
 
-    lastToolUseAt = now;
+    lastUseWaypointUseAt = now;
     bot.log("cave Use waypoint used adjacent tile", {
       direction: normalizedDirection,
       waypoint: waypointPosition,
@@ -726,10 +727,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   function runUseWaypoint(index, waypoint, playerPosition) {
     if (!waypoint || !playerPosition) return false;
 
-    // A Use waypoint is reached only when the player is on its exact tile.
-    // Once reached, immediately execute the configured directional use and
-    // then advance the route. Do not wait for the door/floor movement result;
-    // the game server is responsible for applying that movement.
+    // Use waypoints require exact arrival. If the player is not on the
+    // waypoint tile anymore, clear the active encounter so the next exact
+    // arrival can arm a fresh use attempt.
     if (getPositionKey(playerPosition) !== getPositionKey(waypoint)) {
       if (useWaypointState.index === index) resetUseWaypointState();
       return false;
@@ -752,37 +752,45 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       useWaypointState.usedFromPositionKey = getPositionKey(playerPosition);
 
       stopCurrentMovement();
+    }
 
-      // The player has reached this waypoint. Use it once, in the selected
-      // direction, then mark the waypoint complete and continue the route.
-      if (!useDirectionalUse(waypoint, direction)) {
-        bot.log("cave Use waypoint reached but directional use was not sent", {
+    // Give the movement/pathing loop one full 100 ms settle period after
+    // exact arrival before attempting the directional use.
+    if (now - useWaypointState.startedAt < USE_WAYPOINT_SETTLE_MS) {
+      return true;
+    }
+
+    // A successful use is the only event that completes the waypoint.
+    // Failed/transient dispatches remain armed and are retried on the next
+    // Cavebot tick instead of becoming permanently stuck on this waypoint.
+    if (useWaypointState.phase !== "complete") {
+      if (useDirectionalUse(waypoint, direction)) {
+        useWaypointState.phase = "complete";
+        useWaypointState.useAt = Date.now();
+
+        const status = bot.cave?.status?.();
+        if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
+          bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+        }
+
+        bot.log("cave Use waypoint reached; directional use sent and waypoint advanced", {
           index: index + 1,
           direction,
           waypoint,
         });
-        return true;
+
+        resetUseWaypointState();
+      } else {
+        bot.log("cave Use waypoint retrying directional use", {
+          index: index + 1,
+          direction,
+          waypoint,
+        });
       }
-
-      useWaypointState.phase = "complete";
-      useWaypointState.useAt = now;
-
-      const status = bot.cave?.status?.();
-      if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
-        bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
-      }
-
-      bot.log("cave Use waypoint reached; directional use sent and waypoint advanced", {
-        index: index + 1,
-        direction,
-        waypoint,
-      });
-
-      resetUseWaypointState();
-      return true;
     }
 
-    // The waypoint was already handled on this arrival.
+    // Keep Cavebot movement blocked while this Use waypoint is waiting for
+    // a successful dispatch.
     return true;
   }
 
