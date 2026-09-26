@@ -18,10 +18,30 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     return !!getToken();
   }
 
-  function setToken(value) {
+  async function setToken(value) {
     const nextValue = String(value || "").trim();
-    if (nextValue) bot.storage.set(tokenStorageKey, nextValue);
-    else bot.storage.remove(tokenStorageKey);
+    if (!nextValue) {
+      bot.storage.remove(tokenStorageKey);
+      updateConnectionUi();
+      return "";
+    }
+
+    // Validate that the token can access this repository before reporting
+    // "connected". A stored token alone does not prove it has write access.
+    const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
+      headers: getHeaders(nextValue),
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      let details = "";
+      try {
+        const data = await response.json();
+        details = data?.message ? ` - ${data.message}` : "";
+      } catch (error) {}
+      throw new Error(`GitHub token check failed: HTTP ${response.status}${details}`);
+    }
+
+    bot.storage.set(tokenStorageKey, nextValue);
     updateConnectionUi();
     return nextValue;
   }
@@ -220,11 +240,13 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
 
     if (!response.ok) {
       let details = "";
+      let documentation = "";
       try {
         const data = await response.json();
         details = data?.message ? ` - ${data.message}` : "";
+        documentation = data?.documentation_url ? ` (${data.documentation_url})` : "";
       } catch (error) {}
-      throw new Error(`GitHub save failed: HTTP ${response.status}${details}`);
+      throw new Error(`GitHub save failed: HTTP ${response.status}${details}${documentation}`);
     }
     return response.json();
   }
@@ -357,9 +379,18 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     const refreshButton = section.querySelector("#minibia-bot-github-waypoints-refresh");
 
     if (saveTokenButton) {
-      saveTokenButton.addEventListener("click", () => {
-        setToken(tokenInput?.value || "");
-        setStatus(hasToken() ? "GitHub: connected for saving" : "GitHub: setup needed for saving");
+      saveTokenButton.addEventListener("click", async () => {
+        try {
+          saveTokenButton.disabled = true;
+          setStatus("GitHub: checking token access...");
+          await setToken(tokenInput?.value || "");
+          setStatus("GitHub: token can access mintest3");
+        } catch (error) {
+          setStatus(`GitHub: ${error?.message || error}`);
+          bot.log("GitHub token check failed", error?.message || error);
+        } finally {
+          saveTokenButton.disabled = false;
+        }
       });
     }
 
