@@ -552,7 +552,21 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return path.slice(0, 1);
   }
 
-  function normalizeWaypoint(waypoint) { return normalizePosition(waypoint); }
+  function normalizeWaypoint(waypoint) {
+    const position = normalizePosition(waypoint);
+    if (!position) return null;
+    // Keep waypoint action metadata with the waypoint itself. The action
+    // module also maintains its legacy sidecar storage, but embedding the
+    // metadata prevents Save/Load from turning action waypoints into Walk.
+    const normalized = { ...position };
+    if (typeof waypoint?.action === "string" && waypoint.action.trim()) {
+      normalized.action = waypoint.action.trim();
+    }
+    if (typeof waypoint?.useDirection === "string" && waypoint.useDirection.trim()) {
+      normalized.useDirection = waypoint.useDirection.trim().toUpperCase();
+    }
+    return normalized;
+  }
   function normalizeRoute(value) {
     if (!Array.isArray(value)) return [];
     return value.map(normalizeWaypoint).filter(Boolean);
@@ -573,6 +587,18 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return Array.from(deduped.values());
   }
   function getRoute() { return route.map((waypoint) => cloneValue(waypoint)); }
+  function setWaypointMetadata(index, metadata = {}) {
+    const normalizedIndex = Math.trunc(Number(index));
+    if (!Number.isFinite(normalizedIndex) || normalizedIndex < 0 || normalizedIndex >= route.length) return null;
+    const waypoint = route[normalizedIndex];
+    if (!waypoint) return null;
+    if (metadata.action != null) waypoint.action = String(metadata.action).trim();
+    if (metadata.useDirection != null) waypoint.useDirection = String(metadata.useDirection).trim().toUpperCase();
+    if (!waypoint.action) delete waypoint.action;
+    if (!waypoint.useDirection) delete waypoint.useDirection;
+    persistRoute();
+    return cloneValue(waypoint);
+  }
   function getTransitions() { return transitions.map((transition) => cloneValue(transition)); }
   function persistTransitions() { persistActivePreset(); }
 
@@ -1714,6 +1740,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     updateConfig,
     config,
     getRoute,
+    setWaypointMetadata,
     getTransitions,
     getPresetNames,
     getActivePresetName,
