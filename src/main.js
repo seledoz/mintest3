@@ -512,6 +512,7 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
     });
 
     window.minibiaBot = bot;
+    if (window.__minibiaLoaderRuntime) window.__minibiaLoaderRuntime.bot = bot;
     return bot;
   }
 
