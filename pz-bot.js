@@ -246,7 +246,7 @@
     if (!isCurrentLoader()) throw new Error("stale Minibia loader aborted");
     if(!rawCode||!rawCode.trim())throw new Error(`Failed to load ${path}: empty response`);
     const sourceUrl=`${rawBaseUrl}/${path}`;
-    const evaluate=(source)=>{try{new Function(source);(0,eval)(`${source}\n//# sourceURL=${sourceUrl}`);return null;}catch(error){return error;}};
+    const evaluate=(source)=>{try{new Function(source);(0,eval)(`${source}\n//# sourceURL=${sourceUrl}`);return null;}catch(evaluationError){return evaluationError;}};
     let code=addSafeUiPerformanceOptimizations(rawCode,path);
     // Runtime guard for stale cached cave.js copies: the rope observer previously
     // used previousPosition after the local variable was renamed to previous.
@@ -260,20 +260,20 @@
     // Re-check immediately before eval so an older loader can never execute
     // a module after ownership has moved to the newer loader.
     if (!isCurrentLoader()) throw new Error("stale Minibia loader aborted");
-    let error=evaluate(code);
-    if(error&&code!==rawCode){console.warn(`[minibia-bot] ${path} transformed source failed; retrying original source`,error);error=evaluate(rawCode);}
-    if(error&&path==="src/modules/cave-waypoint-actions.js"){
+    let evaluationError=evaluate(code);
+    if(evaluationError&&code!==rawCode){console.warn(`[minibia-bot] ${path} transformed source failed; retrying original source`,evaluationError);evaluationError=evaluate(rawCode);}
+    if(evaluationError&&path==="src/modules/cave-waypoint-actions.js"){
       const fallbackUrl="https://raw.githubusercontent.com/seledoz/mintest3/2f0938a7c745bd819fa22aa008d50628a2472e49/src/modules/cave-waypoint-actions.js";
-      console.warn("[minibia-bot] Cave waypoint actions failed from main; loading known-good fallback commit",fallbackUrl,error);
+      console.warn("[minibia-bot] Cave waypoint actions failed from main; loading known-good fallback commit",fallbackUrl,evaluationError);
       const fallbackResponse=await fetch(`${fallbackUrl}?t=${Date.now()}-${Math.random()}`,{cache:"no-store"});
-      if(!fallbackResponse.ok)throw error;
+      if(!fallbackResponse.ok)throw evaluationError;
       const fallbackCode=await fallbackResponse.text();
       const fallbackError=evaluate(fallbackCode);
       if(!fallbackError)return;
       console.error("[minibia-bot] Known-good Cave waypoint actions fallback also failed",fallbackError);
       throw fallbackError;
     }
-    if(error){console.error(`[minibia-bot] Failed to evaluate ${path}`,error);throw error;}
+    if(evaluationError){console.error(`[minibia-bot] Failed to evaluate ${path}`,evaluationError);throw evaluationError;}
   }
   async function load(){
     if (!isCurrentLoader()) return;
@@ -301,5 +301,5 @@
     window.setTimeout(() => { if (isCurrentLoader()) normalizeCavePathfinderModeUi(); }, 1000);
     console.log(`[minibia-bot] Loaded source files from ${repository}@${ref} (loader ${loaderGeneration})`);
   }
-  load().catch(error=>console.error("[minibia-bot] Source loader failed",error));
+  load().catch(loaderError=>console.error("[minibia-bot] Source loader failed",loaderError));
 })();
