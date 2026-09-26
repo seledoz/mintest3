@@ -2,7 +2,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installGithubWaypointLibraryModule(bot) {
   const repoOwner = "seledoz";
-  const repoName = "mintest2";
+  const repoName = "mintest3";
   const branch = "main";
   const waypointDirectory = "waypoints";
   const tokenStorageKey = "minibiaBot.github.token";
@@ -53,8 +53,21 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     return { x: Math.trunc(x), y: Math.trunc(y), z: Math.trunc(z) };
   }
 
+  function normalizeWaypoint(value) {
+    const position = normalizePosition(value);
+    if (!position) return null;
+    const waypoint = { ...position };
+    if (typeof value?.action === "string" && value.action.trim()) {
+      waypoint.action = value.action.trim();
+    }
+    if (typeof value?.useDirection === "string" && value.useDirection.trim()) {
+      waypoint.useDirection = value.useDirection.trim().toUpperCase();
+    }
+    return waypoint;
+  }
+
   function normalizeRoute(value) {
-    return Array.isArray(value) ? value.map(normalizePosition).filter(Boolean) : [];
+    return Array.isArray(value) ? value.map(normalizeWaypoint).filter(Boolean) : [];
   }
 
   function normalizeTransition(value) {
@@ -252,7 +265,12 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     bot.cave?.stop?.();
     bot.cave?.clearWaypoints?.();
     bot.cave?.clearTransitions?.();
-    route.forEach((waypoint) => bot.cave?.addWaypoint?.(waypoint));
+    route.forEach((waypoint) => {
+      bot.cave?.addWaypoint?.(waypoint, {
+        action: waypoint.action || "walk",
+        useDirection: waypoint.useDirection || "N",
+      });
+    });
     bot.cave?.savePreset?.(script.name);
     bot.cave?.loadPreset?.(script.name);
     bot.log("GitHub waypoint script loaded", {
