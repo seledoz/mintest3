@@ -945,15 +945,65 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const radius = Math.max(4, Math.min(20, waypointDistance + 2));
     let best = null;
     let bestScore = Number.POSITIVE_INFINITY;
-    getNearbyTransitionTiles(position, waypoint, radius).forEach((entry) => {
+    const candidates = getNearbyTransitionTiles(position, waypoint, radius);
+
+    bot.logDebug("[ROPE TRACE] SEARCH", {
+      position,
+      waypoint,
+      radius,
+      candidateCount: candidates.length,
+    });
+
+    candidates.forEach((entry, candidateIndex) => {
       const playerDistance = getDistance(position, entry.position);
       const tileToWaypointDistance = Math.abs(entry.position.x - waypoint.x) + Math.abs(entry.position.y - waypoint.y);
-      const score = playerDistance * 10 + tileToWaypointDistance + getFloorChangeTileBias(entry.tile, position, waypoint);
+      const bias = getFloorChangeTileBias(entry.tile, position, waypoint);
+      const score = playerDistance * 10 + tileToWaypointDistance + bias;
+      const isRopeTarget = isRopeTargetTile(entry.tile);
+      const isHole = isHoleTile(entry.tile);
+      const isRopeSpot = isRopeSpotTile(entry.tile);
+      const isFloorChange = isFloorChangeTile(entry.tile);
+
+      bot.logDebug("[ROPE TRACE] CANDIDATE", {
+        candidateIndex,
+        position: entry.position,
+        playerDistance,
+        waypointDistance: tileToWaypointDistance,
+        bias,
+        score,
+        isRopeTarget,
+        isHole,
+        isRopeSpot,
+        isFloorChange,
+        selected: score < bestScore,
+      });
+
       if (score < bestScore) {
         bestScore = score;
-        best = { tile: entry.tile, position: entry.position, playerDistance, waypointDistance: tileToWaypointDistance };
+        best = {
+          tile: entry.tile,
+          position: entry.position,
+          playerDistance,
+          waypointDistance: tileToWaypointDistance,
+          score,
+          bias,
+          candidateIndex,
+        };
       }
     });
+
+    bot.logDebug("[ROPE TRACE] SELECTED", best ? {
+      position: best.position,
+      score: best.score,
+      bias: best.bias,
+      playerDistance: best.playerDistance,
+      waypointDistance: best.waypointDistance,
+      candidateIndex: best.candidateIndex,
+    } : {
+      position: null,
+      reason: "no transition candidates",
+    });
+
     return best;
   }
 
@@ -1237,6 +1287,12 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const source = resolveObservedTransitionSource(previous);
       if (source) upsertTransition(source, current);
       state.pendingTransitionSource = null;
+      bot.logDebug("[ROPE TRACE] FLOOR TRANSITION CONFIRMED", {
+        from: previousPosition,
+        to: currentPosition,
+        pendingTarget: cloneValue(state.ropeUsePendingTarget),
+        lockedTarget: cloneValue(state.ropeLockedTarget),
+      });
       clearRopeUsePending("floor transition confirmed");
       state.ropeLockedTarget = null;
       state.ropeLockedApproach = null;
@@ -1331,13 +1387,30 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       });
       return true;
     }
-    const moved = useToolOnTile(findRopeSource(), targetTile, targetPosition, "cave roped transition tile", now, lockedApproach);
+    const ropeSource = findRopeSource();
+    bot.logDebug("[ROPE TRACE] USE ATTEMPT", {
+      target: normalizePosition(targetPosition),
+      source: normalizePosition(ropeSource),
+      playerPosition: normalizePosition(bot.getPlayerPosition()),
+      pending: state.ropeUsePending,
+    });
+    const moved = useToolOnTile(ropeSource, targetTile, targetPosition, "cave roped transition tile", now, lockedApproach);
+    bot.logDebug("[ROPE TRACE] USE RESULT", {
+      target: normalizePosition(targetPosition),
+      moved,
+      playerPosition: normalizePosition(bot.getPlayerPosition()),
+    });
     if (moved && isAdjacentTile(normalizePosition(bot.getPlayerPosition()), targetPosition)) {
       state.ropeUsePending = true;
       state.ropeUsePendingAt = now;
       state.ropeUsePendingTarget = normalizePosition(targetPosition);
       bot.logDebug("cave rope use accepted; waiting for floor transition before another rope use", {
         target: state.ropeUsePendingTarget,
+        timeoutMs: ROPE_USE_PENDING_TIMEOUT_MS,
+      });
+      bot.logDebug("[ROPE TRACE] PENDING", {
+        target: state.ropeUsePendingTarget,
+        pendingAt: state.ropeUsePendingAt,
         timeoutMs: ROPE_USE_PENDING_TIMEOUT_MS,
       });
     }
@@ -1440,6 +1513,17 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
           tileY: visibleCandidate.position.y,
           tileZ: visibleCandidate.position.z,
           targetZ: waypoint.z,
+          score: visibleCandidate.score ?? null,
+          candidateIndex: visibleCandidate.candidateIndex ?? null,
+          playerDistance: visibleCandidate.playerDistance ?? null,
+          waypointDistance: visibleCandidate.waypointDistance ?? null,
+          bias: visibleCandidate.bias ?? null,
+        });
+        bot.logDebug("[ROPE TRACE] LOCKED", {
+          target: normalizePosition(visibleCandidate.position),
+          targetZ: waypoint.z,
+          score: visibleCandidate.score ?? null,
+          candidateIndex: visibleCandidate.candidateIndex ?? null,
         });
         return handleFloorChange(waypoint, now);
       }
@@ -1587,6 +1671,16 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       }
       if (position && waypoint.z !== position.z) {
         bot.logDebug("cave floor change needed", { fromZ: position.z, toZ: waypoint.z, waypointIndex: state.currentIndex + 1, waypoint });
+        bot.logDebug("[ROPE TRACE] FLOOR CHANGE REQUEST", {
+          position,
+          waypoint,
+          waypointIndex: state.currentIndex + 1,
+          direction: state.direction,
+          lockedTarget: cloneValue(state.ropeLockedTarget),
+          lockedApproach: cloneValue(state.ropeLockedApproach),
+          pendingTarget: cloneValue(state.ropeUsePendingTarget),
+          pending: state.ropeUsePending,
+        });
         handleFloorChange(waypoint, now);
         return;
       }
