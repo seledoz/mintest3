@@ -1288,8 +1288,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       if (source) upsertTransition(source, current);
       state.pendingTransitionSource = null;
       bot.logDebug("[ROPE TRACE] FLOOR TRANSITION CONFIRMED", {
-        from: previousPosition,
-        to: currentPosition,
+        from: previous,
+        to: current,
         pendingTarget: cloneValue(state.ropeUsePendingTarget),
         lockedTarget: cloneValue(state.ropeLockedTarget),
       });
