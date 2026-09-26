@@ -188,11 +188,13 @@
     if (!isCurrentLoader()) return;
     destroyKnownBot();
     if (!isCurrentLoader()) return;
+    window.__minibiaLoaderRuntime.bot = window.minibiaBot || null;
     purgeLegacyCaveWaitDelay();
     installUiCompatibilityShim();
     delete window.__minibiaBotBundle;
     window.__minibiaBotBundle = {};
     window.__minibiaBotBundle.__minibiaLoaderGeneration = loaderGeneration;
+    window.__minibiaLoaderRuntime.bot = null;
     for (const path of sourceFiles) {
       if (!isCurrentLoader()) return;
       await loadSourceFile(path);
