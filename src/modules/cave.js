@@ -1472,12 +1472,37 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function advanceWaypoint() {
     if (!route.length) return null;
     if (route.length === 1) return route[0];
+
+    const previousDirection = state.direction;
     let nextIndex = state.currentIndex + state.direction;
-    if (nextIndex >= route.length) { state.direction = -1; nextIndex = route.length - 2; }
-    else if (nextIndex < 0) { state.direction = 1; nextIndex = 1; }
+    if (nextIndex >= route.length) {
+      state.direction = -1;
+      nextIndex = route.length - 2;
+    } else if (nextIndex < 0) {
+      state.direction = 1;
+      nextIndex = 1;
+    }
+
+    // A waypoint can be visited again after the route reaches an endpoint.
+    // Clear the native pathfinder's cached movement state whenever the route
+    // advances (especially when direction reverses) so the next pass starts
+    // with a fresh path instead of reusing stale movement state.
+    try {
+      window.gameClient?.world?.pathfinder?.setPathfindCache?.(null);
+    } catch (_) {}
+    state.lastPathAt = 0;
+    state.lastProgressAt = Date.now();
+    state.lastPositionKey = getPositionKey(bot.getPlayerPosition());
+
     state.currentIndex = Math.max(0, Math.min(route.length - 1, nextIndex));
     const nextWaypoint = getCurrentWaypoint();
-    bot.log("cave advanced waypoint", { index: state.currentIndex + 1, total: route.length, direction: state.direction, waypoint: nextWaypoint });
+    bot.log("cave advanced waypoint", {
+      index: state.currentIndex + 1,
+      total: route.length,
+      direction: state.direction,
+      directionChanged: previousDirection !== state.direction,
+      waypoint: nextWaypoint,
+    });
     return nextWaypoint;
   }
   function scheduleNextTick() {
