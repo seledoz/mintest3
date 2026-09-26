@@ -9,20 +9,19 @@ Use this loader in the game console:
     console.log("[minibia-bot] Fetching pz-bot.js:", url);
 
     const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
 
     const code = await response.text();
-    if (!code.trim()) {
-      throw new Error("GitHub returned an empty pz-bot.js");
-    }
+    console.log("[minibia-bot] Received pz-bot.js:", {
+      bytes: code.length,
+      hasErrorDeclaration: code.includes("let error=evaluate(code);")
+    });
 
-    // Parse first so syntax errors are reported before execution.
+    if (!code.trim()) throw new Error("GitHub returned an empty pz-bot.js");
     new Function(code);
 
-    console.log("[minibia-bot] Evaluating pz-bot.js...");
-    window.eval(code);
+    console.log("[minibia-bot] Executing pz-bot.js through Function boundary...");
+    new Function(code)();
   } catch (error) {
     console.error("[minibia-bot] README loader failed:", error);
   }
