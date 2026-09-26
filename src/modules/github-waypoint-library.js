@@ -2,8 +2,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installGithubWaypointLibraryModule(bot) {
   const repoOwner = "seledoz";
-  const repoName = "mintest3";
-  const branch = "bot-waypoints";
+  const repoName = "mintest2";
+  const branch = "main";
   const waypointDirectory = "waypoints";
   const tokenStorageKey = "minibiaBot.github.token";
   const statusStorageKey = "minibiaBot.githubWaypointLibrary.lastStatus";
@@ -18,30 +18,10 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     return !!getToken();
   }
 
-  async function setToken(value) {
+  function setToken(value) {
     const nextValue = String(value || "").trim();
-    if (!nextValue) {
-      bot.storage.remove(tokenStorageKey);
-      updateConnectionUi();
-      return "";
-    }
-
-    // Validate that the token can access this repository before reporting
-    // "connected". A stored token alone does not prove it has write access.
-    const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
-      headers: getHeaders(nextValue),
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      let details = "";
-      try {
-        const data = await response.json();
-        details = data?.message ? ` - ${data.message}` : "";
-      } catch (error) {}
-      throw new Error(`GitHub token check failed: HTTP ${response.status}${details}`);
-    }
-
-    bot.storage.set(tokenStorageKey, nextValue);
+    if (nextValue) bot.storage.set(tokenStorageKey, nextValue);
+    else bot.storage.remove(tokenStorageKey);
     updateConnectionUi();
     return nextValue;
   }
@@ -153,49 +133,13 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     return new TextDecoder().decode(Uint8Array.from(atob(String(text || "").replace(/\s/g, "")), (char) => char.charCodeAt(0)));
   }
 
-  function getHeaders(value = "") {
+  function getHeaders(value = getToken()) {
     const headers = {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
     };
     if (value) headers.Authorization = `Bearer ${value}`;
     return headers;
-  }
-
-  async function ensureWaypointBranch() {
-    const value = getToken();
-    if (!value) throw new Error("Save GitHub Setup first");
-
-    const refUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/git/ref/heads/${encodeURIComponent(branch)}`;
-    const existing = await fetch(refUrl, { headers: getHeaders(value), cache: "no-store" });
-    if (existing.ok) return true;
-    if (existing.status !== 404) {
-      let details = "";
-      try { const data = await existing.json(); details = data?.message ? ` - ${data.message}` : ""; } catch (error) {}
-      throw new Error(`GitHub branch check failed: HTTP ${existing.status}${details}`);
-    }
-
-    const baseResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/ref/heads/main`, {
-      headers: getHeaders(value), cache: "no-store"
-    });
-    if (!baseResponse.ok) {
-      let details = "";
-      try { const data = await baseResponse.json(); details = data?.message ? ` - ${data.message}` : ""; } catch (error) {}
-      throw new Error(`GitHub main branch lookup failed: HTTP ${baseResponse.status}${details}`);
-    }
-    const baseData = await baseResponse.json();
-
-    const createResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/refs`, {
-      method: "POST",
-      headers: { ...getHeaders(value), "Content-Type": "application/json" },
-      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: baseData.object?.sha }),
-    });
-    if (!createResponse.ok) {
-      let details = "";
-      try { const data = await createResponse.json(); details = data?.message ? ` - ${data.message}` : ""; } catch (error) {}
-      throw new Error(`GitHub waypoint branch creation failed: HTTP ${createResponse.status}${details}`);
-    }
-    return true;
   }
 
   async function fetchJson(url, options = {}) {
@@ -276,13 +220,11 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
 
     if (!response.ok) {
       let details = "";
-      let documentation = "";
       try {
         const data = await response.json();
         details = data?.message ? ` - ${data.message}` : "";
-        documentation = data?.documentation_url ? ` (${data.documentation_url})` : "";
       } catch (error) {}
-      throw new Error(`GitHub save failed: HTTP ${response.status}${details}${documentation}`);
+      throw new Error(`GitHub save failed: HTTP ${response.status}${details}`);
     }
     return response.json();
   }
@@ -296,7 +238,6 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     if (!route.length) throw new Error("No waypoints to save");
 
     const path = getScriptPath(scriptName);
-    await ensureWaypointBranch();
     const { sha } = await fetchFileForWrite(path);
     const script = { version: 1, name: scriptName, updatedAt: new Date().toISOString(), route, transitions };
     await writeScriptFile(path, script, sha);
@@ -416,18 +357,9 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     const refreshButton = section.querySelector("#minibia-bot-github-waypoints-refresh");
 
     if (saveTokenButton) {
-      saveTokenButton.addEventListener("click", async () => {
-        try {
-          saveTokenButton.disabled = true;
-          setStatus("GitHub: checking token access...");
-          await setToken(tokenInput?.value || "");
-          setStatus("GitHub: token can access mintest3");
-        } catch (error) {
-          setStatus(`GitHub: ${error?.message || error}`);
-          bot.log("GitHub token check failed", error?.message || error);
-        } finally {
-          saveTokenButton.disabled = false;
-        }
+      saveTokenButton.addEventListener("click", () => {
+        setToken(tokenInput?.value || "");
+        setStatus(hasToken() ? "GitHub: connected for saving" : "GitHub: setup needed for saving");
       });
     }
 
