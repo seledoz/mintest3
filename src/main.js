@@ -363,27 +363,12 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
   }
 
   function boot(currentBundle = bundle) {
-    // Refuse to boot from an old/overlapping loader. The loader stamps the
-    // bundle with its generation before evaluating this file.
-    const loaderGeneration = currentBundle?.__minibiaLoaderGeneration;
-    const loaderRuntime = window.__minibiaLoaderRuntime;
-    if (!Number.isFinite(loaderGeneration) || loaderRuntime?.activeToken !== loaderGeneration) {
-      console.warn("[minibia-bot] Ignoring stale main.js boot", {
-        loaderGeneration: loaderGeneration ?? null,
-        activeLoaderGeneration: loaderRuntime?.activeToken ?? null,
-      });
-      return null;
-    }
-
     const previousEnabledSnapshot = getPersistedEnabledSnapshot(window.minibiaBot);
     if (window.minibiaBot?.destroy) window.minibiaBot.destroy();
     restorePersistedEnabledSnapshot(previousEnabledSnapshot);
     forceAttackAndCaveDisabled();
 
     const bot = currentBundle.createBot();
-    if (window.__minibiaLoaderRuntime?.activeToken === loaderGeneration) {
-      window.__minibiaLoaderRuntime.bot = bot;
-    }
     currentBundle.installPzModule(bot);
     currentBundle.installXrayModule(bot);
     currentBundle.installPanicModule(bot);
