@@ -1758,7 +1758,11 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     state.running = false;
     if (state.timerId != null) { window.clearTimeout(state.timerId); state.timerId = null; }
     stopObserver();
-    stopMinimapOverlay();
+    // Keep the waypoint overlay alive while CaveBot is stopped. The main
+    // bootstrap intentionally calls stop() after installing CaveBot, and
+    // destroying the overlay here made all loaded waypoints disappear from
+    // the minimap before the user could start CaveBot.
+    startMinimapOverlay();
     if (shouldPersistEnabled) { config.enabled = false; persistConfig(); }
     state.pausedForCombat = false;
     state.ropeLockedTarget = null;
