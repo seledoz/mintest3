@@ -88,7 +88,13 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     for (const container of containers) {
       for (const id of FIRE_FIELD_IDS) {
         const definition = container[id];
+        // The three MinTest3 fire-field stages 2123-2125 are always ordinary
+        // walkable squares. Patch their definition even when Walk Over Fields
+        // is disabled, because the native pathfinder may use item-definition
+        // collision flags instead of the tile isWalkable() wrapper.
+        const alwaysWalkable = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id);
         if (!definition || definitionPatches.has(definition)) continue;
+        if (!enabled && !alwaysWalkable) continue;
         const props = definition.properties && typeof definition.properties === "object"
           ? definition.properties
           : definition;
@@ -111,12 +117,19 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
           }
           changed = true;
         }
-        if (changed) definitionPatches.set(definition, { props, original });
+        if (changed) definitionPatches.set(definition, {
+          props,
+          original,
+          alwaysWalkable: ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id),
+        });
       }
     }
 
     if (!enabled) {
       for (const [definition, patch] of definitionPatches) {
+        // Keep 2123-2125 patched permanently: these are unconditional
+        // CaveBot walkable squares, not optional Walk Over Fields tiles.
+        if (patch.alwaysWalkable) continue;
         for (const [key, value] of Object.entries(patch.original)) patch.props[key] = value;
         definitionPatches.delete(definition);
       }
