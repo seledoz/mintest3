@@ -106,44 +106,13 @@ window.__minibiaBotBundle.installFireFieldTileScannerModule = function installFi
     return result;
   }
 
-  function getGameCanvas() {
-    return Array.from(document.querySelectorAll("canvas"))
-      .map(canvas => ({ canvas, rect: canvas.getBoundingClientRect() }))
-      .filter(x => x.rect.width >= 200 && x.rect.height >= 150)
-      .sort((a, b) => b.rect.width * b.rect.height - a.rect.width * a.rect.height)[0] || null;
-  }
-
-  function arm() {
-    if (state.armed) return false;
-    const info = getGameCanvas();
-    if (!info) {
-      showResult({ position: getPosition(bot.getPlayerPosition?.()) || {x:0,y:0,z:0}, tileFound: false, items: [], fireCandidates: [] });
+  function scanStandingTile() {
+    const position = getPosition(bot.getPlayerPosition?.());
+    if (!position) {
+      showResult({ position: { x: 0, y: 0, z: 0 }, tileFound: false, items: [], fireCandidates: [] });
       return false;
     }
-    state.armed = true;
-    const button = document.getElementById("minibia-bot-fire-field-scan-button");
-    if (button) button.textContent = "Click a game tile…";
-    state.listener = (event) => {
-      if (!state.armed) return;
-      const me = getPosition(bot.getPlayerPosition?.());
-      if (!me) return;
-      const rect = info.rect;
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
-      const tileWidth = rect.width / 17;
-      const tileHeight = rect.height / 13;
-      const col = Math.floor((event.clientX - rect.left) / tileWidth);
-      const row = Math.floor((event.clientY - rect.top) / tileHeight);
-      const x = me.x + col - 8;
-      const y = me.y + row - 6;
-      state.armed = false;
-      document.removeEventListener("click", state.listener, true);
-      state.listener = null;
-      if (button) button.textContent = "Scan Tile";
-      showResult(describeTile({ x, y, z: me.z }));
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    document.addEventListener("click", state.listener, true);
+    showResult(describeTile(position));
     return true;
   }
 
@@ -157,7 +126,7 @@ window.__minibiaBotBundle.installFireFieldTileScannerModule = function installFi
     section.innerHTML = `<div class="mb-label">Fire Field ID Scanner</div>
       <div class="mb-stack">
         <button type="button" id="minibia-bot-fire-field-scan-button" class="mb-button">Scan Tile</button>
-        <div id="minibia-bot-fire-field-scan-result" class="mb-small-note">Click Scan Tile, then click the game tile you want to inspect.</div>
+        <div id="minibia-bot-fire-field-scan-result" class="mb-small-note">Click Scan Tile to inspect the tile you are standing on.</div>
         <div class="mb-small-note">Reports tile X/Y/Z, every exposed item ID/name/type, and possible fire-field matches. This does not enable Walk Over Fields.</div>
       </div>`;
     anchor.insertAdjacentElement("afterend", section);
@@ -199,7 +168,7 @@ window.__minibiaBotBundle.installFireFieldTileScannerModule = function installFi
     state.uiObserver = null;
   }
 
-  bot.fireFieldTileScanner = { arm, scanPosition, ensureUi, stop, describeTile };
+  bot.fireFieldTileScanner = { scanStandingTile, scanPosition, ensureUi, stop, describeTile };
   ensureUi();
   bot.addCleanup?.(stop);
   return bot.fireFieldTileScanner;
