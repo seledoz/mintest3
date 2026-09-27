@@ -1152,6 +1152,58 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     });
   }
 
+  function hasAlwaysWalkableFireFieldBetween(fromPos, toPos) {
+    if (!fromPos || !toPos || fromPos.z !== toPos.z) return false;
+    const dx = Math.sign(toPos.x - fromPos.x);
+    const dy = Math.sign(toPos.y - fromPos.y);
+    let x = fromPos.x;
+    let y = fromPos.y;
+    const maxSteps = Math.max(Math.abs(toPos.x - fromPos.x), Math.abs(toPos.y - fromPos.y));
+    for (let step = 0; step <= maxSteps; step += 1) {
+      const tile = getTileAt({ x, y, z: fromPos.z });
+      if (isTileWithAlwaysWalkableFireFieldId(tile)) return true;
+      if (x === toPos.x && y === toPos.y) break;
+      // For cardinal routes this follows the exact corridor. For diagonal
+      // routes it advances both axes, which is sufficient to detect a
+      // fire-field waypoint/corridor before native pathing is attempted.
+      if (x !== toPos.x) x += dx;
+      if (y !== toPos.y) y += dy;
+    }
+    return false;
+  }
+
+  function stepDirectlyTowardFireFieldWaypoint(fromPos, toPos) {
+    if (!fromPos || !toPos || fromPos.z !== toPos.z) return false;
+    const dx = toPos.x - fromPos.x;
+    const dy = toPos.y - fromPos.y;
+    if (dx === 0 && dy === 0) return false;
+
+    // Prefer the larger axis so a diagonal route progresses deterministically.
+    let next = null;
+    if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+      next = { x: fromPos.x + Math.sign(dx), y: fromPos.y, z: fromPos.z };
+    } else if (dy !== 0) {
+      next = { x: fromPos.x, y: fromPos.y + Math.sign(dy), z: fromPos.z };
+    }
+    if (!next) return false;
+
+    const tile = getTileAt(next);
+    const passable = isTileWithAlwaysWalkableFireFieldId(tile) || !!tile?.isWalkable?.();
+    if (!passable) return false;
+
+    const stepped = bot.caveArrowKeys?.stepToPosition?.(next);
+    if (!stepped) return false;
+
+    state.lastPathAt = Date.now();
+    bot.log("cave direct fire-field route step", {
+      from: fromPos,
+      to: next,
+      waypoint: toPos,
+      fireFieldRoute: true,
+    });
+    return true;
+  }
+
   function pathContainsFireField(path) {
     if (!config.walkOverFields || !Array.isArray(path)) return false;
     return path.some((position) => {
@@ -1196,12 +1248,21 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
     const now = Date.now();
 
-    if (config.pathfinderMode === 'astar') {
+    {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
-      const path = findPathAStar(fromPos, waypointPos);
 
-      if (path && path.length > 0) {
+      // Do this before either pathfinder mode. If the requested route
+      // contains one of the unconditional fire-field stages, the native
+      // game pathfinder must never be asked to solve that route.
+      if (fromPos && waypointPos && hasAlwaysWalkableFireFieldBetween(fromPos, waypointPos)) {
+        if (stepDirectlyTowardFireFieldWaypoint(fromPos, waypointPos)) return true;
+      }
+
+      if (config.pathfinderMode === 'astar') {
+        const path = findPathAStar(fromPos, waypointPos);
+
+        if (path && path.length > 0) {
         const playerPos = fromPos;
 
         // Even in explicit A* mode, do not hand a route containing the
@@ -1257,6 +1318,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
           index: state.currentIndex + 1,
           total: route.length,
         });
+        }
       }
     }
 
