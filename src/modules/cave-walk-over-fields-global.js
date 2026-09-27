@@ -217,7 +217,9 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const originalFindPath = pathfinder.findPath;
     function guardedFindPath(...args) {
       const status = bot.cave?.status?.();
-      if (status?.config?.walkOverFields) patchAllLoadedTiles(bot);
+      // Always refresh the unconditional 2123-2125 collision patch before
+      // native pathfinding. Other field stages remain controlled by the toggle.
+      patchAllLoadedTiles(bot);
       return originalFindPath.apply(this, args);
     }
     guardedFindPath.__globalCaveFieldGuard = true;
