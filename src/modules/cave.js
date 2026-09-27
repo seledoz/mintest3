@@ -1240,45 +1240,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return true;
   }
 
-  function inspectFireFieldRoute(fromPos, waypointPos) {
-    if (!fromPos || !waypointPos || fromPos.z !== waypointPos.z) return;
-    const dx = Math.sign(waypointPos.x - fromPos.x);
-    const dy = Math.sign(waypointPos.y - fromPos.y);
-    const maxSteps = Math.max(Math.abs(waypointPos.x - fromPos.x), Math.abs(waypointPos.y - fromPos.y));
-    const tiles = [];
-    let x = fromPos.x;
-    let y = fromPos.y;
-    for (let step = 0; step <= maxSteps; step += 1) {
-      const tile = getTileAt({ x, y, z: fromPos.z });
-      const ids = getTileThings(tile)
-        .map((thing) => Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId))
-        .filter((id) => Number.isFinite(id));
-      let walkable = null;
-      try { walkable = tile?.isWalkable?.() ?? null; } catch (_) {}
-      tiles.push({ x, y, z: fromPos.z, ids, walkable, alwaysFireField: isTileWithAlwaysWalkableFireFieldId(tile) });
-      if (x === waypointPos.x && y === waypointPos.y) break;
-      if (x !== waypointPos.x) x += dx;
-      if (y !== waypointPos.y) y += dy;
-    }
-
-    let astar = null;
-    try {
-      astar = findPathAStar(fromPos, waypointPos);
-    } catch (error) {
-      astar = { error: error?.message || String(error) };
-    }
-
-    bot.log("cave fire-field route diagnostic", {
-      from: fromPos,
-      waypoint: waypointPos,
-      directCorridor: tiles,
-      astarPath: Array.isArray(astar) ? astar : null,
-      astarPathLength: Array.isArray(astar) ? astar.length : null,
-      astarContainsAlwaysFireField: Array.isArray(astar) ? pathContainsAlwaysWalkableFireField(astar) : false,
-      astarError: !Array.isArray(astar) ? astar?.error || "no path" : null,
-    });
-  }
-
   function goToWaypoint(waypoint) {
     patchFieldWalkabilityForCavePathing();
     patchRopeSpellWaypointWalkability(waypoint);
@@ -1286,11 +1247,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (!from || !waypoint) return false;
 
     const now = Date.now();
-
-    // Focused diagnostics for the current fire-field path issue.
-    if (from && waypoint && from.z === waypoint.z) {
-      inspectFireFieldRoute(normalizePosition(from), normalizePosition(waypoint));
-    }
 
     {
       const fromPos = normalizePosition(from);
@@ -1352,27 +1308,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     }
 
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
-
-    // Preserve the existing Walk Over Fields behavior without changing the
-    // destination. The waypoint itself remains the exact requested tile.
-    //
-    // The 2123/2124/2125 fire-field stages are special: they are ordinary
-    // walkable squares for CaveBot even when Walk Over Fields is disabled.
-    // The native game pathfinder can still reject them with "no way", so when
-    // an A* route contains one of these IDs, follow that already-validated
-    // route one tile at a time instead of handing the route to the native
-    // collision/pathfinder.
-    const fromForFieldPath = normalizePosition(from);
-    const waypointForFieldPath = normalizePosition(waypoint);
-    if (fromForFieldPath && waypointForFieldPath && fromForFieldPath.z === waypointForFieldPath.z) {
-      const fieldPath = findPathAStar(fromForFieldPath, waypointForFieldPath);
-      const mustBypassNativePathfinder = pathContainsAlwaysWalkableFireField(fieldPath);
-      const normalWalkOverFieldRoute = config.walkOverFields && pathContainsFireField(fieldPath);
-      if ((mustBypassNativePathfinder || normalWalkOverFieldRoute) &&
-          stepAlongWalkOverFieldPath(fieldPath, fromForFieldPath)) {
-        return true;
-      }
-    }
 
     try {
       window.gameClient?.world?.pathfinder?.findPath?.(from, to);
