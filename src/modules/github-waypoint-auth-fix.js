@@ -2,7 +2,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 (function installGithubWaypointAuthFix() {
   const TOKEN_KEY = "minibiaBot.github.token";
-  const REPO_URL = "https://api.github.com/repos/seledoz/mintest2";
+  const REPO_URL = "https://api.github.com/repos/seledoz/mintest3";
 
   function readToken() {
     try { return String(window.localStorage.getItem(TOKEN_KEY) || "").replace(/^"|"$/g, "").trim(); }
