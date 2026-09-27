@@ -12,6 +12,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     2131, 2132, 2133,
   ]);
   const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
+  // Fire field stages 2123-2125 are ordinary pathing squares in MinTest3.
+  const ALWAYS_WALKABLE_FIRE_FIELD_IDS = new Set([2123, 2124, 2125]);
   const state = { timerId: null, installed: false, patchedTiles: new Set() };
 
   function getDefinition(thing) {
@@ -42,6 +44,14 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     try { add(tile.getObjects?.()); } catch (_) {}
     try { add(tile.getTopThing?.()); } catch (_) {}
     return result;
+  }
+
+  function isAlwaysWalkableFireFieldTile(tile) {
+    for (const thing of getThings(tile)) {
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      if (ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id)) return true;
+    }
+    return false;
   }
 
   function isFireFieldTile(tile) {
@@ -129,7 +139,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const original = tile.isWalkable;
     const wrapper = function globalCaveFieldWalkable(...args) {
       const status = bot.cave?.status?.();
-      if (status?.config?.walkOverFields && isFireFieldTile(this)) return true;
+      if (isAlwaysWalkableFireFieldTile(this) ||
+          (status?.config?.walkOverFields && isFireFieldTile(this))) return true;
       return original.apply(this, args);
     };
     wrapper.__globalCaveFieldWalkable = true;
@@ -160,7 +171,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const original = prototype[name];
       const wrapper = function globalCaveFieldPassability(...args) {
         const status = bot.cave?.status?.();
-        if (status?.config?.walkOverFields && isFireFieldTile(this)) {
+        if (isAlwaysWalkableFireFieldTile(this) ||
+            (status?.config?.walkOverFields && isFireFieldTile(this))) {
           if (name === "isBlocking" || name === "blocksMovement") return false;
           return true;
         }
