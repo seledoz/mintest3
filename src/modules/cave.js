@@ -368,7 +368,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
 
   function patchFieldWalkabilityForCavePathing() {
-    if (!config.walkOverFields) return false;
     const position = normalizePosition(bot.getPlayerPosition());
     if (!position) return false;
     let tile = null;
