@@ -1144,6 +1144,14 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return true;
   }
 
+  function pathContainsAlwaysWalkableFireField(path) {
+    if (!Array.isArray(path)) return false;
+    return path.some((position) => {
+      const tile = getTileAt(position);
+      return isTileWithAlwaysWalkableFireFieldId(tile);
+    });
+  }
+
   function pathContainsFireField(path) {
     if (!config.walkOverFields || !Array.isArray(path)) return false;
     return path.some((position) => {
@@ -1153,7 +1161,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
 
   function stepAlongWalkOverFieldPath(path, fromPos) {
-    if (!config.walkOverFields || !Array.isArray(path) || !fromPos) return false;
+    if (!Array.isArray(path) || !fromPos) return false;
     const next = path.find((position) => {
       if (!position) return false;
       return position.x !== fromPos.x || position.y !== fromPos.y || position.z !== fromPos.z;
@@ -1247,14 +1255,22 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
     // Preserve the existing Walk Over Fields behavior without changing the
     // destination. The waypoint itself remains the exact requested tile.
-    if (config.walkOverFields) {
-      const fromForFieldPath = normalizePosition(from);
-      const waypointForFieldPath = normalizePosition(waypoint);
-      if (fromForFieldPath && waypointForFieldPath && fromForFieldPath.z === waypointForFieldPath.z) {
-        const fieldPath = findPathAStar(fromForFieldPath, waypointForFieldPath);
-        if (pathContainsFireField(fieldPath) && stepAlongWalkOverFieldPath(fieldPath, fromForFieldPath)) {
-          return true;
-        }
+    //
+    // The 2123/2124/2125 fire-field stages are special: they are ordinary
+    // walkable squares for CaveBot even when Walk Over Fields is disabled.
+    // The native game pathfinder can still reject them with "no way", so when
+    // an A* route contains one of these IDs, follow that already-validated
+    // route one tile at a time instead of handing the route to the native
+    // collision/pathfinder.
+    const fromForFieldPath = normalizePosition(from);
+    const waypointForFieldPath = normalizePosition(waypoint);
+    if (fromForFieldPath && waypointForFieldPath && fromForFieldPath.z === waypointForFieldPath.z) {
+      const fieldPath = findPathAStar(fromForFieldPath, waypointForFieldPath);
+      const mustBypassNativePathfinder = pathContainsAlwaysWalkableFireField(fieldPath);
+      const normalWalkOverFieldRoute = config.walkOverFields && pathContainsFireField(fieldPath);
+      if ((mustBypassNativePathfinder || normalWalkOverFieldRoute) &&
+          stepAlongWalkOverFieldPath(fieldPath, fromForFieldPath)) {
+        return true;
       }
     }
 
