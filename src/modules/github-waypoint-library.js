@@ -2,7 +2,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
 window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installGithubWaypointLibraryModule(bot) {
   const repoOwner = "seledoz";
-  const repoName = "mintest2";
+  const repoName = "mintest3";
   const branch = "main";
   const waypointDirectory = "waypoints";
   const tokenStorageKey = "minibiaBot.github.token";
@@ -284,14 +284,24 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
     bot.cave?.stop?.();
     bot.cave?.clearWaypoints?.();
     bot.cave?.clearTransitions?.();
-    route.forEach((waypoint) => {
+    route.forEach((waypoint, index) => {
+      const action = waypoint.action || "walk";
+      const useDirection = waypoint.useDirection || "N";
       bot.cave?.addWaypoint?.(waypoint, {
-        action: waypoint.action || "walk",
-        useDirection: waypoint.useDirection || "N",
+        action,
+        useDirection,
+      });
+      // Explicitly write the imported metadata back onto the live route.
+      // This protects against load order where the CaveBot action wrapper
+      // is not yet the method handling addWaypoint().
+      bot.cave?.setWaypointMetadata?.(index, {
+        action,
+        useDirection,
       });
     });
+    // Saving activates the imported preset. Do not immediately load it again:
+    // a second load pass can normalize missing metadata back to Walk.
     bot.cave?.savePreset?.(script.name);
-    bot.cave?.loadPreset?.(script.name);
     bot.log("GitHub waypoint script loaded", {
       name: script.name,
       waypoints: route.length,
