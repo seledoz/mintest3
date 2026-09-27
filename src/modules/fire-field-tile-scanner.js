@@ -133,7 +133,7 @@ window.__minibiaBotBundle.installFireFieldTileScannerModule = function installFi
     section.querySelector("#minibia-bot-fire-field-scan-button")?.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      arm();
+      scanStandingTile();
     });
     return true;
   }
