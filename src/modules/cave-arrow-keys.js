@@ -239,18 +239,65 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
 
   function findDpadButtons() {
     if (state.dpadButtons && Object.values(state.dpadButtons).every((b) => b?.isConnected)) return state.dpadButtons;
-    const candidates = Array.from(document.querySelectorAll("button")).map((button) => ({ button, key: getButtonDirection(button) })).filter((entry) => entry.key);
+
+    function isUsableButton(button) {
+      if (!button || !button.isConnected) return false;
+      const style = window.getComputedStyle?.(button);
+      if (style && (style.display === "none" || style.visibility === "hidden")) return false;
+      if (button.disabled) return false;
+
+      // Outfit/selection dialogs can contain four arrow-shaped buttons too.
+      // Never treat those controls as the movement D-pad.
+      let node = button;
+      for (let depth = 0; node && depth < 10; depth += 1, node = node.parentElement) {
+        const text = [
+          node.id,
+          typeof node.className === "string" ? node.className : "",
+          node.getAttribute?.("role") || "",
+          node.getAttribute?.("aria-label") || "",
+          node.getAttribute?.("data-testid") || "",
+        ].join(" ").toLowerCase();
+        if (
+          node.getAttribute?.("role") === "dialog" ||
+          /modal|dialog|outfit|character.?select|appearance|wardrobe|avatar/.test(text)
+        ) return false;
+      }
+      return true;
+    }
+
+    const candidates = Array.from(document.querySelectorAll("button"))
+      .map((button) => ({ button, key: getButtonDirection(button) }))
+      .filter((entry) => entry.key && isUsableButton(entry.button));
+
+    const groups = [];
     for (const entry of candidates) {
       let container = entry.button.parentElement;
-      for (let depth = 0; container && depth < 7; depth += 1, container = container.parentElement) {
+      for (let depth = 0; container && depth < 8; depth += 1, container = container.parentElement) {
         const buttons = {};
         for (const button of container.querySelectorAll("button")) {
           const key = getButtonDirection(button);
-          if (key && !buttons[key]) buttons[key] = button;
+          if (key && isUsableButton(button) && !buttons[key]) buttons[key] = button;
         }
-        if (Object.keys(buttons).length === 4) { state.dpadButtons = buttons; return buttons; }
+        if (Object.keys(buttons).length === 4) {
+          const marker = [
+            container.id,
+            typeof container.className === "string" ? container.className : "",
+            container.getAttribute?.("data-testid") || "",
+            container.getAttribute?.("aria-label") || "",
+          ].join(" ").toLowerCase();
+          const score = /(dpad|direction|movement|move|joystick|touch.?control|game.?control)/.test(marker) ? 100 : 0;
+          groups.push({ buttons, score, depth });
+          break;
+        }
       }
     }
+
+    if (groups.length) {
+      groups.sort((a, b) => b.score - a.score || a.depth - b.depth);
+      state.dpadButtons = groups[0].buttons;
+      return state.dpadButtons;
+    }
+
     const fallback = {};
     for (const entry of candidates) if (!fallback[entry.key]) fallback[entry.key] = entry.button;
     state.dpadButtons = Object.keys(fallback).length === 4 ? fallback : null;
