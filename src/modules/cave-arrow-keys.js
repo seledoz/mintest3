@@ -305,6 +305,33 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
   }
 
   function dispatchKeyboardMove(key) {
+    // Prefer the game's own movement handler. The client uses this handler
+    // for its touch controls, so this bypasses DOM arrow buttons entirely.
+    try {
+      const handlers = [
+        window.Keyboard?.handleMoveKey,
+        window.keyboard?.handleMoveKey,
+        window.gameClient?.keyboard?.handleMoveKey,
+        window.gameClient?.Keyboard?.handleMoveKey,
+      ].filter((fn) => typeof fn === "function");
+      if (handlers.length) {
+        const directionNames = {
+          ArrowUp: ["ArrowUp", "up", "north", "0"],
+          ArrowRight: ["ArrowRight", "right", "east", "1"],
+          ArrowDown: ["ArrowDown", "down", "south", "2"],
+          ArrowLeft: ["ArrowLeft", "left", "west", "3"],
+        };
+        for (const handler of handlers) {
+          for (const value of directionNames[key] || [key]) {
+            try {
+              const result = handler.call(window.Keyboard || window.keyboard || window.gameClient?.keyboard || window.gameClient?.Keyboard, value);
+              if (result !== false) return true;
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+
     try {
       const target = document.activeElement || document.body || document;
       const eventInit = {
