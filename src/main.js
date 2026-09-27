@@ -400,6 +400,7 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
     currentBundle.installMaxLightModule?.(bot);
     currentBundle.installPanel(bot);
     currentBundle.installCaveWaypointActionsModule?.(bot);
+    currentBundle.installFireFieldTileScannerModule?.(bot);
 
     bot.ui.inject();
     bot.spellTimer?.ensureUi?.();
