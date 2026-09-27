@@ -2,6 +2,25 @@
   const STORAGE_KEY = "minibiaBot.lure.config";
   const TICK_MS = 120;
   const LOST_GRACE_MS = 10000;
+  const ALWAYS_WALKABLE_FIRE_FIELD_IDS = new Set([2123, 2124, 2125]);
+
+  function isAlwaysWalkableFireField(tile) {
+    if (!tile) return false;
+    const things = [];
+    const add = (value) => {
+      if (!value) return;
+      if (Array.isArray(value)) value.forEach(add);
+      else if (!things.includes(value)) things.push(value);
+    };
+    add(tile); add(tile.items); add(tile.things); add(tile.objects); add(tile.topThing);
+    try { add(tile.getItems?.()); } catch (_) {}
+    try { add(tile.getThings?.()); } catch (_) {}
+    try { add(tile.getObjects?.()); } catch (_) {}
+    try { add(tile.getTopThing?.()); } catch (_) {}
+    return things.some((thing) => ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(
+      Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId)
+    ));
+  }
 
   function pos(value) {
     if (!value) return null;
@@ -79,7 +98,9 @@
         let walkable = true;
         try {
           const tile = window.gameClient?.world?.getTileFromWorldPosition?.(new Position(p.x, p.y, p.z));
-          if (tile && typeof tile.isWalkable === "function") walkable = !!tile.isWalkable();
+          if (tile && typeof tile.isWalkable === "function") {
+            walkable = isAlwaysWalkableFireField(tile) || !!tile.isWalkable();
+          }
         } catch (_) {}
         if (!walkable) continue;
         candidates.push({ p, score: cheb(p, target) });
