@@ -1203,6 +1203,15 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
       if (path && path.length > 0) {
         const playerPos = fromPos;
+
+        // Even in explicit A* mode, do not hand a route containing the
+        // always-walkable fire-field stages to the native pathfinder. It can
+        // reject those tiles independently of CaveBot's walkability matrix.
+        if (pathContainsAlwaysWalkableFireField(path) &&
+            stepAlongWalkOverFieldPath(path, playerPos)) {
+          return true;
+        }
+
         const waypointOnScreen = waypointPos && isOnScreen(waypointPos, playerPos);
         let targetTile = null;
 
