@@ -48,6 +48,9 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     2131, 2132, 2133,
   ]);
   const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
+  // These three fire-field stages are always treated as ordinary walkable
+  // squares by every CaveBot pathing mode, independent of the Walk Over Fields toggle.
+  const ALWAYS_WALKABLE_FIRE_FIELD_IDS = new Set([2123, 2124, 2125]);
   const state = {
     running: false,
     timerId: null,
@@ -355,6 +358,15 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return false;
   }
 
+  function isTileWithAlwaysWalkableFireFieldId(tile) {
+    if (!tile) return false;
+    for (const thing of getTileThings(tile)) {
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      if (ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id)) return true;
+    }
+    return false;
+  }
+
   function patchFieldWalkabilityForCavePathing() {
     if (!config.walkOverFields) return false;
     const position = normalizePosition(bot.getPlayerPosition());
@@ -368,7 +380,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     if (prototype.__caveBotWalkOverFieldsApplied) return true;
     const original = prototype.isWalkable;
     const wrapper = function caveBotWalkOverFieldsIsWalkable(...args) {
-      if (config.walkOverFields && isFireFieldTileForCavePathing(this)) return true;
+      if (isTileWithAlwaysWalkableFireFieldId(this) ||
+          (config.walkOverFields && isFireFieldTileForCavePathing(this))) return true;
       return original.apply(this, args);
     };
     wrapper.__caveBotWalkOverFieldsApplied = true;
@@ -394,7 +407,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
           if (!tile?.__position || tile.__position.z !== z) continue;
           const key = `${tile.__position.x},${tile.__position.y}`;
           const walkable = tile.isWalkable ? tile.isWalkable() : false;
-          matrix.set(key, config.walkOverFields && isFireFieldTileForCavePathing(tile) ? true : walkable);
+          matrix.set(key, isTileWithAlwaysWalkableFireFieldId(tile) ||
+            (config.walkOverFields && isFireFieldTileForCavePathing(tile)) ? true : walkable);
         }
       }
     } catch (e) {
