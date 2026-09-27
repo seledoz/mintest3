@@ -56,6 +56,7 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     2131, 2132, 2133,
   ]);
   const damagingFieldPattern = /(?:fire|flame|poison|energy)\s*(?:field|wall|damage|ground|tile)/i;
+  const ALWAYS_WALKABLE_FIRE_FIELD_IDS = new Set([2123, 2124, 2125]);
 
   function normalizePosition(value) {
     if (!value) return null;
@@ -120,7 +121,10 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
   function isDWalkPassable(tile) {
     if (!tile) return false;
     const fieldName = getDamagingFieldName(tile);
-    if (fieldName && isWalkOverFieldsEnabled()) return true;
+    const alwaysWalkableFireField = getTileThings(tile).some((thing) =>
+      ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId))
+    );
+    if (alwaysWalkableFireField || (fieldName && isWalkOverFieldsEnabled())) return true;
     try { return typeof tile.isWalkable === "function" && tile.isWalkable(); } catch (_) { return false; }
   }
 
