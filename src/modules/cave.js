@@ -90,7 +90,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     bot.storage.get(configStorageKey, {})
   );
   config.tickMs = 200;
-  config.walkOverFields = !!config.walkOverFields;
+  config.walkOverFields = false;
 
   function normalizePresetName(value) {
     const normalized = String(value || "").trim().replace(/\s+/g, " ");
@@ -1853,7 +1853,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function updateConfig(nextConfig = {}) {
     Object.assign(config, nextConfig);
     config.tickMs = 200;
-    config.walkOverFields = !!config.walkOverFields;
+    config.walkOverFields = false;
     persistConfig();
     bot.log("cave config updated", { ...config });
     return { ...config };
