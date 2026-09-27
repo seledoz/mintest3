@@ -304,7 +304,46 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     return state.dpadButtons;
   }
 
+  function dispatchKeyboardMove(key) {
+    try {
+      const target = document.activeElement || document.body || document;
+      const eventInit = {
+        key,
+        code: key,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+      };
+      const down = new KeyboardEvent("keydown", eventInit);
+      const up = new KeyboardEvent("keyup", eventInit);
+      const downAccepted = target.dispatchEvent(down);
+      window.setTimeout(() => {
+        try { target.dispatchEvent(up); } catch (_) {}
+      }, 0);
+      return downAccepted;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function clickDpadDirection(key, from, next, fieldName) {
+    // Fire-field routing must not depend on identifying a UI arrow button.
+    // The game's normal keyboard movement handler is the safest input path and
+    // cannot accidentally invoke the outfit selector's arrow controls.
+    const keyboardMoved = dispatchKeyboardMove(key);
+    if (keyboardMoved) {
+      state.lastFieldName = fieldName || null;
+      state.lastWalkMethod = fieldName ? `Keyboard direct field step (${key})` : `Keyboard direct step (${key})`;
+      state.lastError = null;
+      state.pendingStep = { from: { ...from }, to: { ...next }, key, fieldName: fieldName || null, sentAt: Date.now() };
+      state.stepRetries = 0;
+      state.lastKey = key;
+      state.lastStepAt = Date.now();
+      return true;
+    }
+
+    // Fallback for clients where movement is exposed only through the touch D-pad.
     const button = findDpadButtons()?.[key];
     if (!button) { state.lastError = `Minibia D-pad control not found for ${key}`; return false; }
     try {
