@@ -304,73 +304,7 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
     return state.dpadButtons;
   }
 
-  function dispatchKeyboardMove(key) {
-    // Prefer the game's own movement handler. The client uses this handler
-    // for its touch controls, so this bypasses DOM arrow buttons entirely.
-    try {
-      const handlers = [
-        window.Keyboard?.handleMoveKey,
-        window.keyboard?.handleMoveKey,
-        window.gameClient?.keyboard?.handleMoveKey,
-        window.gameClient?.Keyboard?.handleMoveKey,
-      ].filter((fn) => typeof fn === "function");
-      if (handlers.length) {
-        const directionNames = {
-          ArrowUp: ["ArrowUp", "up", "north", "0"],
-          ArrowRight: ["ArrowRight", "right", "east", "1"],
-          ArrowDown: ["ArrowDown", "down", "south", "2"],
-          ArrowLeft: ["ArrowLeft", "left", "west", "3"],
-        };
-        for (const handler of handlers) {
-          for (const value of directionNames[key] || [key]) {
-            try {
-              const result = handler.call(window.Keyboard || window.keyboard || window.gameClient?.keyboard || window.gameClient?.Keyboard, value);
-              if (result !== false) return true;
-            } catch (_) {}
-          }
-        }
-      }
-    } catch (_) {}
-
-    try {
-      const target = document.activeElement || document.body || document;
-      const eventInit = {
-        key,
-        code: key,
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        view: window,
-      };
-      const down = new KeyboardEvent("keydown", eventInit);
-      const up = new KeyboardEvent("keyup", eventInit);
-      const downAccepted = target.dispatchEvent(down);
-      window.setTimeout(() => {
-        try { target.dispatchEvent(up); } catch (_) {}
-      }, 0);
-      return downAccepted;
-    } catch (_) {
-      return false;
-    }
-  }
-
   function clickDpadDirection(key, from, next, fieldName) {
-    // Fire-field routing must not depend on identifying a UI arrow button.
-    // The game's normal keyboard movement handler is the safest input path and
-    // cannot accidentally invoke the outfit selector's arrow controls.
-    const keyboardMoved = dispatchKeyboardMove(key);
-    if (keyboardMoved) {
-      state.lastFieldName = fieldName || null;
-      state.lastWalkMethod = fieldName ? `Keyboard direct field step (${key})` : `Keyboard direct step (${key})`;
-      state.lastError = null;
-      state.pendingStep = { from: { ...from }, to: { ...next }, key, fieldName: fieldName || null, sentAt: Date.now() };
-      state.stepRetries = 0;
-      state.lastKey = key;
-      state.lastStepAt = Date.now();
-      return true;
-    }
-
-    // Fallback for clients where movement is exposed only through the touch D-pad.
     const button = findDpadButtons()?.[key];
     if (!button) { state.lastError = `Minibia D-pad control not found for ${key}`; return false; }
     try {
@@ -385,7 +319,6 @@ window.__minibiaBotBundle.installCaveArrowKeysModule = function installCaveArrow
       return true;
     } catch (error) { state.lastError = `D-pad movement failed: ${error?.message || error}`; return false; }
   }
-
   function handlePendingStep(from, to) {
     const pending = state.pendingStep;
     if (!pending || !sameTile(to, pending.to)) return null;
