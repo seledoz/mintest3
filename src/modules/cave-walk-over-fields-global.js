@@ -220,7 +220,24 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       // Always refresh the unconditional 2123-2125 collision patch before
       // native pathfinding. Other field stages remain controlled by the toggle.
       patchAllLoadedTiles(bot);
-      return originalFindPath.apply(this, args);
+      // Native pathfinder caches can retain a collision matrix created before
+      // the unconditional 2123-2125 patches were installed. Invalidate the
+      // native cache immediately before each CaveBot path request.
+      try {
+        if (typeof pathfinder.setPathfindCache === "function") {
+          pathfinder.setPathfindCache(null);
+        }
+      } catch (_) {}
+      const result = originalFindPath.apply(this, args);
+      try {
+        bot.logDebug?.("cave native pathfinder request", {
+          from: args[0] ? { x: Number(args[0].x), y: Number(args[0].y), z: Number(args[0].z) } : null,
+          to: args[1] ? { x: Number(args[1].x), y: Number(args[1].y), z: Number(args[1].z) } : null,
+          resultType: Array.isArray(result) ? "array" : typeof result,
+          resultLength: Array.isArray(result) ? result.length : null,
+        });
+      } catch (_) {}
+      return result;
     }
     guardedFindPath.__globalCaveFieldGuard = true;
     guardedFindPath.__globalCaveFieldOriginal = originalFindPath;
