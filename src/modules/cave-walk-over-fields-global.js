@@ -173,6 +173,46 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     return tiles;
   }
 
+  function patchFieldObject(object, bot) {
+    if (!object || typeof object !== "object") return false;
+    const alwaysWalkable = isAlwaysWalkableFieldTile(object) || isFireFieldTile(object);
+    if (!alwaysWalkable) return false;
+    let changed = false;
+    const patchContainer = (target) => {
+      if (!target || typeof target !== "object") return;
+      for (const key of Object.keys(target)) {
+        if (!/(walk|path|pass|block|collision|obstacle|solid|impass|unwalk)/i.test(key)) continue;
+        if (typeof target[key] !== "boolean") continue;
+        try {
+          target[key] = /^(?:block|blocks|blocking|blocksMovement|blocksWalk|blockMovement|unwalkable|impassable|isBlocking|blocksPath|blocksPathfinding|collision|collides|obstacle|solid)$/i.test(key) ? false : true;
+          changed = true;
+        } catch (_) {}
+      }
+    };
+    patchContainer(object);
+    patchContainer(object.properties);
+    patchContainer(object.definition);
+    return changed;
+  }
+
+  function patchFieldMethods(object, bot) {
+    if (!object || typeof object !== "object") return;
+    const methods = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk", "blocksPath", "blocksPathfinding"];
+    for (const name of methods) {
+      if (typeof object[name] !== "function" || object[name].__globalCaveFieldWalkable) continue;
+      const original = object[name];
+      const wrapper = function globalCaveFieldObjectPassability(...args) {
+        if (isAlwaysWalkableFieldTile(this) || (bot.cave?.status?.()?.config?.walkOverFields && isFireFieldTile(this))) {
+          return name === "isBlocking" || name === "blocksMovement" || name === "blocksPath" || name === "blocksPathfinding" ? false : true;
+        }
+        return original.apply(this, args);
+      };
+      wrapper.__globalCaveFieldWalkable = true;
+      wrapper.__globalCaveFieldOriginal = original;
+      try { object[name] = wrapper; } catch (_) {}
+    }
+  }
+
   function patchTile(tile, bot) {
     if (!tile || typeof tile.isWalkable !== "function") return false;
     if (tile.isWalkable.__globalCaveFieldWalkable) return true;
@@ -230,7 +270,17 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     patchFieldDefinitions(bot);
     patchPrototype(bot);
     for (const tile of getLoadedTiles()) {
-      if (isPoisonFieldTile(tile) || isFireFieldTile(tile)) patchTile(tile, bot);
+      if (isPoisonFieldTile(tile) || isFireFieldTile(tile)) {
+        patchTile(tile, bot);
+        patchFieldObject(tile, bot);
+        patchFieldMethods(tile, bot);
+        for (const thing of getTileThings(tile)) {
+          if (isPoisonFieldTile(thing) || isFireFieldTile(thing)) {
+            patchFieldObject(thing, bot);
+            patchFieldMethods(thing, bot);
+          }
+        }
+      }
     }
   }
 
