@@ -903,10 +903,13 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const pixelWidth = Math.round(width * dpr);
     const pixelHeight = Math.round(height * dpr);
     if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) { canvas.width = pixelWidth; canvas.height = pixelHeight; }
-    canvas.style.left = `${Math.round(rect.left)}px`;
-    canvas.style.top = `${Math.round(rect.top)}px`;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
+    // Keep the overlay locked to the minimap's exact fractional viewport.
+    // Rounding the viewport position every 250ms made the waypoint layer
+    // visibly jump as the minimap/camera moved.
+    canvas.style.left = `${rect.left}px`;
+    canvas.style.top = `${rect.top}px`;
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -948,12 +951,17 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function startMinimapOverlay() {
     if (minimapOverlayState.timerId != null) return;
     ensureMinimapOverlayStyle();
+    const renderFrame = () => {
+      if (!isCurrentCaveGeneration()) return;
+      renderMinimapOverlay();
+      minimapOverlayState.timerId = window.requestAnimationFrame(renderFrame);
+    };
     renderMinimapOverlay();
-    minimapOverlayState.timerId = window.setInterval(renderMinimapOverlay, 250);
+    minimapOverlayState.timerId = window.requestAnimationFrame(renderFrame);
   }
   function stopMinimapOverlay() {
     if (minimapOverlayState.timerId != null) {
-      window.clearInterval(minimapOverlayState.timerId);
+      window.cancelAnimationFrame(minimapOverlayState.timerId);
       minimapOverlayState.timerId = null;
     }
     destroyMinimapOverlayElements();
@@ -1361,18 +1369,26 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
 
     try {
-      window.gameClient?.world?.pathfinder?.findPath?.(from, to);
+      const nativePathfinder = window.gameClient?.world?.pathfinder;
+      const findPath = nativePathfinder?.findPath;
+      if (typeof findPath !== "function") throw new Error("native pathfinder.findPath is unavailable");
+      const result = findPath.call(nativePathfinder, from, to);
       state.lastPathAt = now;
       bot.log("cave pathing to waypoint", {
         ...waypoint,
         index: state.currentIndex + 1,
         total: route.length,
+        nativeResultType: Array.isArray(result) ? "array" : typeof result,
+        nativeResultLength: Array.isArray(result) ? result.length : null,
       });
       return true;
     } catch (error) {
       bot.log("cave pathing failed", {
         ...waypoint,
-        error: error?.message || error,
+        from: fromPos,
+        to: waypointPos,
+        error: error?.message || String(error),
+        errorName: error?.name || null,
       });
       return false;
     }
