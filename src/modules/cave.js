@@ -48,6 +48,10 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     2131, 2132, 2133,
   ]);
   const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
+  // Poison fields are intentionally treated as walkable by CaveBot. They are
+  // damage tiles, not blockers, so pathing must be allowed to cross them.
+  const POISON_FIELD_IDS = new Set([1490, 1496]);
+  const POISON_FIELD_PATTERN = /(?:poison|venom)\s*(?:field|wall|damage|ground|tile)/i;
   // These three fire-field stages are always treated as ordinary walkable
   // squares by every CaveBot pathing mode, independent of the Walk Over Fields toggle.
   const ALWAYS_WALKABLE_FIRE_FIELD_IDS = new Set([2123, 2124, 2125]);
@@ -367,6 +371,26 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return false;
   }
 
+  function isPoisonFieldTileForCavePathing(tile) {
+    if (!tile) return false;
+    for (const thing of getTileThings(tile)) {
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      if (POISON_FIELD_IDS.has(id)) return true;
+      const definition = getThingDefinition(thing?.id);
+      const text = [
+        thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
+        thing?.type, thing?.thingType, thing?.category,
+        thing?.properties?.name, thing?.properties?.field,
+        thing?.properties?.type, thing?.properties?.category,
+        definition?.name, definition?.properties?.name,
+        definition?.properties?.field, definition?.properties?.type,
+        definition?.properties?.category,
+      ].filter(Boolean).map(String).join(" ");
+      if (POISON_FIELD_PATTERN.test(text) || /\\bpoison\\s*field\\b/i.test(text)) return true;
+    }
+    return false;
+  }
+
   function patchFieldWalkabilityForCavePathing() {
     const position = normalizePosition(bot.getPlayerPosition());
     if (!position) return false;
@@ -380,6 +404,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const original = prototype.isWalkable;
     const wrapper = function caveBotWalkOverFieldsIsWalkable(...args) {
       if (isTileWithAlwaysWalkableFireFieldId(this) ||
+          isPoisonFieldTileForCavePathing(this) ||
           (config.walkOverFields && isFireFieldTileForCavePathing(this))) return true;
       return original.apply(this, args);
     };
@@ -407,6 +432,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
           const key = `${tile.__position.x},${tile.__position.y}`;
           const walkable = tile.isWalkable ? tile.isWalkable() : false;
           matrix.set(key, isTileWithAlwaysWalkableFireFieldId(tile) ||
+            isPoisonFieldTileForCavePathing(tile) ||
             (config.walkOverFields && isFireFieldTileForCavePathing(tile)) ? true : walkable);
         }
       }
