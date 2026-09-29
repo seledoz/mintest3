@@ -1304,8 +1304,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         if (path && path.length > 0) {
         const playerPos = fromPos;
 
-        if (pathContainsPoisonField(path) && stepAlongPoisonFieldPath(path, playerPos)) return true;
-
         const waypointOnScreen = waypointPos && isOnScreen(waypointPos, playerPos);
         let targetTile = null;
 
@@ -1358,9 +1356,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const fromPos = normalizePosition(from);
     const waypointPos = normalizePosition(waypoint);
     if (fromPos && waypointPos && fromPos.z === waypointPos.z) {
-      const poisonPath = findPathAStar(fromPos, waypointPos);
-      if (poisonPath && pathContainsPoisonField(poisonPath) && stepAlongPoisonFieldPath(poisonPath, fromPos)) return true;
-    }
+      }
 
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
 
