@@ -51,7 +51,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   // Poison fields are intentionally treated as walkable by CaveBot. They are
   // damage tiles, not blockers, so pathing must be allowed to cross them.
   // Classic Tibia poison-field stages. Some servers use the newer 1503 stage too.
-  const POISON_FIELD_IDS = new Set([1490, 1496, 1503]);
+  const POISON_FIELD_IDS = new Set([2127]);
   const POISON_FIELD_PATTERN = /(?:poison|venom)\s*(?:field|wall|damage|ground|tile)/i;
   // These three fire-field stages are always treated as ordinary walkable
   // squares by every CaveBot pathing mode, independent of the Walk Over Fields toggle.
