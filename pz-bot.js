@@ -18,7 +18,8 @@
   };
 
   const repository = "seledoz/mintest3";
-  // Pin the runtime to the exact commit so a stale CDN/browser response cannot mix old module code with the current loader.\n  const ref = "7e6b58762812b6409859707bfa2c39984c7454ec";
+  // Pin the runtime to the exact commit so a stale CDN/browser response cannot mix old module code with the current loader.
+  const ref = "7e6b58762812b6409859707bfa2c39984c7454ec";
   const rawBaseUrl = `https://raw.githubusercontent.com/${repository}/${ref}`;
   const sourceFiles = [
     "src/version.js",
