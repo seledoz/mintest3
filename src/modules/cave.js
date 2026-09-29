@@ -50,7 +50,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
   // Poison fields are intentionally treated as walkable by CaveBot. They are
   // damage tiles, not blockers, so pathing must be allowed to cross them.
-  const POISON_FIELD_IDS = new Set([1490, 1496]);
+  // Classic Tibia poison-field stages. Some servers use the newer 1503 stage too.
+  const POISON_FIELD_IDS = new Set([1490, 1496, 1503]);
   const POISON_FIELD_PATTERN = /(?:poison|venom)\s*(?:field|wall|damage|ground|tile)/i;
   // These three fire-field stages are always treated as ordinary walkable
   // squares by every CaveBot pathing mode, independent of the Walk Over Fields toggle.
@@ -1237,6 +1238,26 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     });
   }
 
+  function pathContainsPoisonField(path) {
+    if (!Array.isArray(path)) return false;
+    return path.some((position) => isPoisonFieldTileForCavePathing(getTileAt(position)));
+  }
+
+  function stepAlongPoisonFieldPath(path, fromPos) {
+    if (!Array.isArray(path) || !fromPos) return false;
+    const next = path.find((position) => position &&
+      (position.x !== fromPos.x || position.y !== fromPos.y || position.z !== fromPos.z));
+    if (!next) return false;
+    const nextPos = normalizePosition(next);
+    if (!nextPos || nextPos.z !== fromPos.z) return false;
+    const tile = getTileAt(nextPos);
+    if (!(isPoisonFieldTileForCavePathing(tile) || !!tile?.isWalkable?.())) return false;
+    if (!bot.caveArrowKeys?.stepToPosition?.(nextPos)) return false;
+    state.lastPathAt = Date.now();
+    bot.logDebug("cave stepped onto/through poison field", { from: fromPos, to: nextPos, poisonFieldRoute: true });
+    return true;
+  }
+
   function stepAlongWalkOverFieldPath(path, fromPos) {
     if (!Array.isArray(path) || !fromPos) return false;
     const next = path.find((position) => {
@@ -1282,6 +1303,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
         if (path && path.length > 0) {
         const playerPos = fromPos;
+
+        if (pathContainsPoisonField(path) && stepAlongPoisonFieldPath(path, playerPos)) return true;
 
         const waypointOnScreen = waypointPos && isOnScreen(waypointPos, playerPos);
         let targetTile = null;
@@ -1330,6 +1353,13 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         });
         }
       }
+    }
+
+    const fromPos = normalizePosition(from);
+    const waypointPos = normalizePosition(waypoint);
+    if (fromPos && waypointPos && fromPos.z === waypointPos.z) {
+      const poisonPath = findPathAStar(fromPos, waypointPos);
+      if (poisonPath && pathContainsPoisonField(poisonPath) && stepAlongPoisonFieldPath(poisonPath, fromPos)) return true;
     }
 
     const to = new Position(waypoint.x, waypoint.y, waypoint.z);
