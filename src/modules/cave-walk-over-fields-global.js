@@ -12,8 +12,12 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     2131, 2132, 2133,
   ]);
   const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
-  // Fire field stages 2123-2125 are ordinary pathing squares in MinTest3.
+  const POISON_FIELD_IDS = new Set([2127]);
+  const POISON_FIELD_PATTERN = /(?:poison|venom)\s*(?:field|wall|damage|ground|tile)/i;
+  // Fire 2123-2125 and poison 2127 must be accepted by every CaveBot
+  // pathing mode. Other fire stages remain controlled by Walk Over Fields.
   const ALWAYS_WALKABLE_FIRE_FIELD_IDS = new Set([2123, 2124, 2125]);
+  const ALWAYS_WALKABLE_POISON_FIELD_IDS = new Set([2127]);
   const state = { timerId: null, installed: false, patchedTiles: new Set() };
 
   function getDefinition(thing) {
@@ -54,6 +58,27 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     return false;
   }
 
+  function isPoisonFieldTile(tile) {
+    for (const thing of getThings(tile)) {
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      if (POISON_FIELD_IDS.has(id)) return true;
+      const definition = getDefinition(thing);
+      const text = [
+        thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
+        thing?.type, thing?.thingType, thing?.category,
+        definition?.name, definition?.properties?.name,
+        definition?.properties?.field, definition?.properties?.type,
+        definition?.properties?.category,
+      ].filter(Boolean).map(String).join(" ");
+      if (POISON_FIELD_PATTERN.test(text) || /\bpoison\s*field\b/i.test(text)) return true;
+    }
+    return false;
+  }
+
+  function isAlwaysWalkableFieldTile(tile) {
+    return isAlwaysWalkableFireFieldTile(tile) || isPoisonFieldTile(tile);
+  }
+
   function isFireFieldTile(tile) {
     for (const thing of getThings(tile)) {
       const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
@@ -86,13 +111,15 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     ].filter(Boolean);
 
     for (const container of containers) {
-      for (const id of FIRE_FIELD_IDS) {
+      for (const id of [...FIRE_FIELD_IDS, ...POISON_FIELD_IDS]) {
         const definition = container[id];
         // The three MinTest3 fire-field stages 2123-2125 are always ordinary
         // walkable squares. Patch their definition even when Walk Over Fields
         // is disabled, because the native pathfinder may use item-definition
         // collision flags instead of the tile isWalkable() wrapper.
-        const alwaysWalkable = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id);
+        const isPoison = POISON_FIELD_IDS.has(id);
+        const alwaysWalkable = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) ||
+          ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || isPoison;
         if (!definition || definitionPatches.has(definition)) continue;
         if (!enabled && !alwaysWalkable) continue;
         const props = definition.properties && typeof definition.properties === "object"
@@ -120,7 +147,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         if (changed) definitionPatches.set(definition, {
           props,
           original,
-          alwaysWalkable: ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id),
+          alwaysWalkable: ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || isPoison,
         });
       }
     }
@@ -152,7 +179,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const original = tile.isWalkable;
     const wrapper = function globalCaveFieldWalkable(...args) {
       const status = bot.cave?.status?.();
-      if (isAlwaysWalkableFireFieldTile(this) ||
+      if (isAlwaysWalkableFieldTile(this) ||
           (status?.config?.walkOverFields && isFireFieldTile(this))) return true;
       return original.apply(this, args);
     };
@@ -175,8 +202,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const prototype = tile && Object.getPrototypeOf(tile);
     if (!prototype) return false;
 
-    // The native pathfinder can use several collision predicates. Make a
-    // fire-field tile passable to all of them while Walk Over Fields is ON.
+    // The native pathfinder can use several collision predicates. Make field
+    // tiles passable to all of them before every native path request.
     const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk"];
     let patched = false;
     for (const name of predicates) {
@@ -184,7 +211,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const original = prototype[name];
       const wrapper = function globalCaveFieldPassability(...args) {
         const status = bot.cave?.status?.();
-        if (isAlwaysWalkableFireFieldTile(this) ||
+        if (isAlwaysWalkableFieldTile(this) ||
             (status?.config?.walkOverFields && isFireFieldTile(this))) {
           if (name === "isBlocking" || name === "blocksMovement") return false;
           return true;
@@ -203,7 +230,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     patchFieldDefinitions(bot);
     patchPrototype(bot);
     for (const tile of getLoadedTiles()) {
-      if (isFireFieldTile(tile)) patchTile(tile, bot);
+      if (isPoisonFieldTile(tile) || isFireFieldTile(tile)) patchTile(tile, bot);
     }
   }
 
@@ -213,7 +240,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     if (pathfinder.findPath.__globalCaveFieldGuard) return true;
 
     // Keep the game's native movement/pathfinding algorithm. Only change
-    // fire-field passability while the toggle is enabled.
+    // field collision passability; ordinary fire stages still honor the toggle.
     const originalFindPath = pathfinder.findPath;
     function guardedFindPath(...args) {
       const status = bot.cave?.status?.();
