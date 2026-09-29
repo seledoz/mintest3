@@ -267,21 +267,16 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   }
 
   function patchAllLoadedTiles(bot) {
+    // Do not scan every loaded map tile here. Besides being unnecessary for
+    // native pathfinding, that approach caused large FPS drops on big maps.
+    // The previous implementation also called getTileThings(), which is not
+    // a global API in this client and crashed the entire source loader.
+    //
+    // Keep this path intentionally small: patch the item definitions and the
+    // tile prototype used by the native pathfinder. The native pathfinder can
+    // then evaluate field tiles normally without a loaded-chunk scan.
     patchFieldDefinitions(bot);
     patchPrototype(bot);
-    for (const tile of getLoadedTiles()) {
-      if (isPoisonFieldTile(tile) || isFireFieldTile(tile)) {
-        patchTile(tile, bot);
-        patchFieldObject(tile, bot);
-        patchFieldMethods(tile, bot);
-        for (const thing of getTileThings(tile)) {
-          if (isPoisonFieldTile(thing) || isFireFieldTile(thing)) {
-            patchFieldObject(thing, bot);
-            patchFieldMethods(thing, bot);
-          }
-        }
-      }
-    }
   }
 
   function installPathfinderGuard(bot) {
