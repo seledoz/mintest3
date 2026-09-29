@@ -78,6 +78,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   };
   const minimapOverlayState = {
     timerId: null,
+    lastViewportKey: null,
   };
 
   const storedConfig = bot.storage.get(configStorageKey, {}) || {};
@@ -902,6 +903,14 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const height = Math.max(1, Math.round(rect.height));
     const pixelWidth = Math.round(width * dpr);
     const pixelHeight = Math.round(height * dpr);
+    const viewportKey = [
+      Math.round(rect.left * 100), Math.round(rect.top * 100),
+      Math.round(rect.width * 100), Math.round(rect.height * 100),
+      playerPosition.x, playerPosition.y, playerPosition.z,
+      Number(minimap.__renderLayer) || 0, Number(minimap.__zoomLevel) || 0,
+    ].join(":");
+    if (minimapOverlayState.lastViewportKey === viewportKey) return;
+    minimapOverlayState.lastViewportKey = viewportKey;
     if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) { canvas.width = pixelWidth; canvas.height = pixelHeight; }
     // Keep the overlay locked to the minimap's exact fractional viewport.
     // Rounding the viewport position every 250ms made the waypoint layer
@@ -951,19 +960,22 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function startMinimapOverlay() {
     if (minimapOverlayState.timerId != null) return;
     ensureMinimapOverlayStyle();
+    minimapOverlayState.lastViewportKey = null;
     const renderFrame = () => {
       if (!isCurrentCaveGeneration()) return;
       renderMinimapOverlay();
-      minimapOverlayState.timerId = window.requestAnimationFrame(renderFrame);
+      minimapOverlayState.timerId = window.setTimeout(renderFrame, 100);
     };
     renderMinimapOverlay();
-    minimapOverlayState.timerId = window.requestAnimationFrame(renderFrame);
+    minimapOverlayState.timerId = window.setTimeout(renderFrame, 100);
   }
+
   function stopMinimapOverlay() {
     if (minimapOverlayState.timerId != null) {
-      window.cancelAnimationFrame(minimapOverlayState.timerId);
+      window.clearTimeout(minimapOverlayState.timerId);
       minimapOverlayState.timerId = null;
     }
+    minimapOverlayState.lastViewportKey = null;
     destroyMinimapOverlayElements();
   }
 
