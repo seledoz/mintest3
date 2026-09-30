@@ -685,7 +685,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
     const waypointKey = getActivePresetName() + ":" + index + ":" + getPositionKey(waypoint);
     const direction = normalizeUseDirection(getWaypointUseDirections()[index]);
-    const target = getUseTargetPosition(waypoint, direction);
+    // For Blue Flame, the saved waypoint is the flame itself. The move
+    // destination is therefore the saved waypoint, not a second tile beyond it.
+    const target = normalizePosition(waypoint);
     if (!target) return false;
 
     // The saved waypoint is the blue-flame tile itself. The bot must stop
