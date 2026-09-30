@@ -1062,7 +1062,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
 
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
-    if (action === useAction || action === blueFlameAction) {
+    if (action === useAction) {
       // Hard trace: this must appear whenever the Cavebot reaches a Use
       // waypoint. It tells us whether the action is actually being selected
       // before we investigate the mouse/tile dispatch.
@@ -1175,11 +1175,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       const added = originalAddWaypointCurrentSpot();
       if (added) {
         setLastWaypointAction(selected.action);
-        if (selected.action === useAction) setLastWaypointUseDirection(selected.useDirection);
+        if (selected.action === useAction || selected.action === blueFlameAction) setLastWaypointUseDirection(selected.useDirection);
         bot.log("cave waypoint recorded with action", {
           index: bot.cave?.getRoute?.().length || 0,
           action: selected.action,
-          useDirection: selected.action === useAction ? normalizeUseDirection(selected.useDirection) : null,
+          useDirection: (selected.action === useAction || selected.action === blueFlameAction) ? normalizeUseDirection(selected.useDirection) : null,
         });
       }
       return added;
