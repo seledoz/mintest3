@@ -715,7 +715,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
       blueFlameState.phase = "waiting";
       blueFlameState.deadlineAt = now + 5000;
-      stopCurrentMovement();
+      // Do NOT stop/cancel movement here. stepToPosition() has just issued
+      // the one-square D-pad step; cancelling movement immediately after the
+      // click prevents the player from ever entering the blue flame.
       bot.log("cave Blue Flame stepped one square", {
         index: index + 1,
         waypoint,
