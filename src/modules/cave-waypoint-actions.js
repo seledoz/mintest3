@@ -710,14 +710,48 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       if (now - blueFlameState.startedAt < USE_WAYPOINT_SETTLE_MS) return true;
       if (getPositionKey(playerPosition) !== waypointPositionKey) return true;
 
-      const stepped = bot.caveArrowKeys?.stepToPosition?.(target);
+      // Use the same native CaveBot/world pathfinder used for normal
+      // waypoint movement.  Do not use the Arrow/D-pad movement module here:
+      // Blue Flame needs exactly one adjacent pathing step from the staging
+      // tile, followed by the game's normal walk-over-flame/teleport behavior.
+      let stepped = false;
+      try {
+        const nativePathfinder = window.gameClient?.world?.pathfinder;
+        const findPath = nativePathfinder?.findPath;
+        if (typeof findPath === "function") {
+          const from = new Position(
+            playerPosition.x,
+            playerPosition.y,
+            playerPosition.z
+          );
+          const to = new Position(target.x, target.y, target.z);
+          const result = findPath.call(nativePathfinder, from, to);
+          stepped = true;
+          bot.log("cave Blue Flame native path step issued", {
+            index: index + 1,
+            waypoint,
+            direction,
+            target,
+            nativeResultType: Array.isArray(result) ? "array" : typeof result,
+            nativeResultLength: Array.isArray(result) ? result.length : null,
+          });
+        }
+      } catch (error) {
+        bot.log("cave Blue Flame native path step failed", {
+          index: index + 1,
+          waypoint,
+          direction,
+          target,
+          error: error?.message || String(error),
+        });
+      }
       if (!stepped) return true;
 
       blueFlameState.phase = "waiting";
       blueFlameState.deadlineAt = now + 5000;
-      // Do NOT stop/cancel movement here. stepToPosition() has just issued
-      // the one-square D-pad step; cancelling movement immediately after the
-      // click prevents the player from ever entering the blue flame.
+      // Do not cancel movement here. The native pathfinder has just been
+      // given the exact one-square destination; cancelling it immediately
+      // could prevent the player from entering the blue flame.
       bot.log("cave Blue Flame stepped one square", {
         index: index + 1,
         waypoint,
