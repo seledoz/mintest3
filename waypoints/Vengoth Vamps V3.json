@@ -1,0 +1,282 @@
+{
+  "version": 1,
+  "name": "Vengoth Vamps V3",
+  "updatedAt": "2026-09-30T00:26:07.842Z",
+  "route": [
+    {
+      "x": 32966,
+      "y": 31456,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32965,
+      "y": 31448,
+      "z": 7,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32965,
+      "y": 31447,
+      "z": 8,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32961,
+      "y": 31452,
+      "z": 7,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32958,
+      "y": 31462,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32960,
+      "y": 31455,
+      "z": 5,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32968,
+      "y": 31463,
+      "z": 4,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32971,
+      "y": 31453,
+      "z": 3,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32971,
+      "y": 31458,
+      "z": 3,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32960,
+      "y": 31455,
+      "z": 4,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32963,
+      "y": 31465,
+      "z": 5,
+      "action": "walk",
+      "useDirection": "W"
+    },
+    {
+      "x": 32957,
+      "y": 31465,
+      "z": 6,
+      "action": "use",
+      "useDirection": "W"
+    },
+    {
+      "x": 32951,
+      "y": 31461,
+      "z": 6,
+      "action": "use",
+      "useDirection": "W"
+    },
+    {
+      "x": 32947,
+      "y": 31464,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32948,
+      "y": 31460,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32947,
+      "y": 31461,
+      "z": 5,
+      "action": "walk",
+      "useDirection": "E"
+    },
+    {
+      "x": 32949,
+      "y": 31461,
+      "z": 6,
+      "action": "use",
+      "useDirection": "E"
+    },
+    {
+      "x": 32955,
+      "y": 31465,
+      "z": 6,
+      "action": "use",
+      "useDirection": "E"
+    },
+    {
+      "x": 32958,
+      "y": 31458,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    }
+  ],
+  "transitions": [
+    {
+      "from": {
+        "x": 32963,
+        "y": 31454,
+        "z": 6
+      },
+      "to": {
+        "x": 32963,
+        "y": 31455,
+        "z": 7
+      },
+      "count": 28,
+      "lastSeenAt": 1790727934315
+    },
+    {
+      "from": {
+        "x": 32963,
+        "y": 31454,
+        "z": 7
+      },
+      "to": {
+        "x": 32963,
+        "y": 31453,
+        "z": 6
+      },
+      "count": 36,
+      "lastSeenAt": 1790727958033
+    },
+    {
+      "from": {
+        "x": 32960,
+        "y": 31464,
+        "z": 6
+      },
+      "to": {
+        "x": 32960,
+        "y": 31463,
+        "z": 5
+      },
+      "count": 38,
+      "lastSeenAt": 1790727963199
+    },
+    {
+      "from": {
+        "x": 32962,
+        "y": 31453,
+        "z": 5
+      },
+      "to": {
+        "x": 32962,
+        "y": 31452,
+        "z": 4
+      },
+      "count": 35,
+      "lastSeenAt": 1790727787713
+    },
+    {
+      "from": {
+        "x": 32971,
+        "y": 31461,
+        "z": 3
+      },
+      "to": {
+        "x": 32971,
+        "y": 31462,
+        "z": 4
+      },
+      "count": 35,
+      "lastSeenAt": 1790727838581
+    },
+    {
+      "from": {
+        "x": 32962,
+        "y": 31453,
+        "z": 4
+      },
+      "to": {
+        "x": 32962,
+        "y": 31454,
+        "z": 5
+      },
+      "count": 35,
+      "lastSeenAt": 1790727849433
+    },
+    {
+      "from": {
+        "x": 32960,
+        "y": 31464,
+        "z": 5
+      },
+      "to": {
+        "x": 32960,
+        "y": 31465,
+        "z": 6
+      },
+      "count": 36,
+      "lastSeenAt": 1790727857324
+    },
+    {
+      "from": {
+        "x": 32949,
+        "y": 31458,
+        "z": 6
+      },
+      "to": {
+        "x": 32949,
+        "y": 31457,
+        "z": 5
+      },
+      "count": 36,
+      "lastSeenAt": 1790727911723
+    },
+    {
+      "from": {
+        "x": 32949,
+        "y": 31458,
+        "z": 5
+      },
+      "to": {
+        "x": 32949,
+        "y": 31459,
+        "z": 6
+      },
+      "count": 15,
+      "lastSeenAt": 1790727519843
+    },
+    {
+      "from": {
+        "x": 32971,
+        "y": 31461,
+        "z": 4
+      },
+      "to": {
+        "x": 32971,
+        "y": 31460,
+        "z": 3
+      },
+      "count": 22,
+      "lastSeenAt": 1790727817779
+    }
+  ]
+}
