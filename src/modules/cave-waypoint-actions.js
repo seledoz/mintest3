@@ -711,10 +711,17 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       if (getPositionKey(playerPosition) !== waypointPositionKey) return true;
 
       // Use the same native CaveBot/world pathfinder used for normal
-      // waypoint movement.  Do not use the Arrow/D-pad movement module here:
-      // Blue Flame needs exactly one adjacent pathing step from the staging
-      // tile, followed by the game's normal walk-over-flame/teleport behavior.
+      // waypoint movement. Do not use the Arrow/D-pad movement module.
+      //
+      // A blue-flame tile is a walk-over teleport tile, but the game's tile
+      // object can report it as non-walkable. That makes the native pathfinder
+      // reject an otherwise valid one-square step. Temporarily make ONLY the
+      // requested destination passable while the synchronous native path
+      // request is built, then restore the tile immediately.
       let stepped = false;
+      let nativeResult = null;
+      let targetTile = null;
+      let restoreWalkable = null;
       try {
         const nativePathfinder = window.gameClient?.world?.pathfinder;
         const findPath = nativePathfinder?.findPath;
@@ -725,15 +732,39 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
             playerPosition.z
           );
           const to = new Position(target.x, target.y, target.z);
-          const result = findPath.call(nativePathfinder, from, to);
+
+          try {
+            targetTile = window.gameClient?.world?.getTileFromWorldPosition?.(to) || null;
+          } catch (_) {}
+
+          if (targetTile && typeof targetTile.isWalkable === "function") {
+            const originalIsWalkable = targetTile.isWalkable;
+            const hadOwnIsWalkable = Object.prototype.hasOwnProperty.call(targetTile, "isWalkable");
+            try {
+              targetTile.isWalkable = function blueFlameTemporaryWalkable() {
+                return true;
+              };
+              restoreWalkable = () => {
+                try {
+                  if (hadOwnIsWalkable) targetTile.isWalkable = originalIsWalkable;
+                  else delete targetTile.isWalkable;
+                } catch (_) {}
+              };
+            } catch (_) {
+              restoreWalkable = null;
+            }
+          }
+
+          nativeResult = findPath.call(nativePathfinder, from, to);
           stepped = true;
           bot.log("cave Blue Flame native path step issued", {
             index: index + 1,
             waypoint,
             direction,
             target,
-            nativeResultType: Array.isArray(result) ? "array" : typeof result,
-            nativeResultLength: Array.isArray(result) ? result.length : null,
+            targetTileWasFound: !!targetTile,
+            nativeResultType: Array.isArray(nativeResult) ? "array" : typeof nativeResult,
+            nativeResultLength: Array.isArray(nativeResult) ? nativeResult.length : null,
           });
         }
       } catch (error) {
@@ -744,6 +775,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
           target,
           error: error?.message || String(error),
         });
+      } finally {
+        try { restoreWalkable?.(); } catch (_) {}
       }
       if (!stepped) return true;
 
