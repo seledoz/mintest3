@@ -193,7 +193,17 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     return normalized.slice();
   }
 
-  function getUseTargetPosition(waypoint,direction){ const normalized=normalizePosition(waypoint); if(!normalized)return null; const offsets={N:[0,-1],NE:[1,-1],E:[1,0],SE:[1,1],S:[0,1],SW:[-1,1],W:[-1,0],NW:[-1,-1]}; const o=offsets[normalizeUseDirection(direction)]||offsets.N; return {x:normalized.x+o[0],y:normalized.y+o[1],z:normalized.z}; }
+  function getDirectionalOffsetPosition(position, direction, distance = 1) {
+    const normalized = normalizePosition(position);
+    if (!normalized) return null;
+    const offsets = { N:[0,-1], NE:[1,-1], E:[1,0], SE:[1,1], S:[0,1], SW:[-1,1], W:[-1,0], NW:[-1,-1] };
+    const offset = offsets[normalizeUseDirection(direction)] || offsets.N;
+    return { x: normalized.x + offset[0] * distance, y: normalized.y + offset[1] * distance, z: normalized.z };
+  }
+
+  function getUseTargetPosition(waypoint, direction) {
+    return getDirectionalOffsetPosition(waypoint, direction, 1);
+  }
 
   function getWaypointActions() {
     const routeLength = bot.cave?.getRoute?.().length || 0;
@@ -678,9 +688,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const target = getUseTargetPosition(waypoint, direction);
     if (!target) return false;
 
-    // The waypoint itself is the staging tile. The bot must arrive exactly
-    // there, stop all normal movement, then take exactly one step in the
-    // configured direction onto the blue flame.
+    // The saved waypoint is the blue-flame tile itself. The bot must stop
+    // on the adjacent staging tile, then take exactly one step in the
+    // configured direction onto the saved blue-flame waypoint.
     if (blueFlameState.index !== index ||
         blueFlameState.waypointKey !== waypointKey ||
         blueFlameState.direction !== direction) {
@@ -695,13 +705,19 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
     const waypointPositionKey = getPositionKey(waypoint);
     const playerKey = getPositionKey(playerPosition);
+    const stagingPosition = getDirectionalOffsetPosition(waypoint, direction, -1);
+    const stagingKey = getPositionKey(stagingPosition);
 
-    // Before the exact staging tile is reached, let CaveBot path normally.
-    if (playerKey !== waypointPositionKey && blueFlameState.phase !== "waiting") {
-      return false;
+    // The saved waypoint is the flame. Never path onto it. Instead, path to
+    // the one-tile staging position immediately before it.
+    if (blueFlameState.phase !== "waiting" && playerKey !== stagingKey) {
+      const move = bot.cave?.goToPosition;
+      if (typeof move === "function" && stagingPosition) move.call(bot.cave, stagingPosition);
+      return true;
     }
 
     if (blueFlameState.phase === "ready") {
+      if (playerKey !== stagingKey) return true;
       blueFlameState.startedAt = Date.now();
       blueFlameState.phase = "settling";
       stopCurrentMovement();
@@ -711,7 +727,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     const now = Date.now();
     if (blueFlameState.phase === "settling") {
       if (now - blueFlameState.startedAt < USE_WAYPOINT_SETTLE_MS) return true;
-      if (getPositionKey(playerPosition) !== waypointPositionKey) return true;
+      if (getPositionKey(playerPosition) !== stagingKey) return true;
 
       // Hand the one-square move back to CaveBot itself. This is the
       // exact movement path used for ordinary waypoints; do not call the
@@ -723,7 +739,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       // path request so CaveBot accepts the destination.
       let stepped = false;
       try {
-        const to = new Position(target.x, target.y, target.z);
+        const to = new Position(waypoint.x, waypoint.y, waypoint.z);
         const targetTile = window.gameClient?.world?.getTileFromWorldPosition?.(to) || null;
         const prototype = targetTile && Object.getPrototypeOf(targetTile);
 
@@ -736,7 +752,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
         if (prototype && typeof prototype.isWalkable === "function") {
           const originalIsWalkable = prototype.isWalkable;
-          const targetKey = getPositionKey(target);
+          const targetKey = waypointPositionKey;
           const wrapper = function blueFlameTemporaryWalkable(...args) {
             if (this === targetTile || getPositionKey(this?.__position || this?.position) === targetKey) return true;
             return originalIsWalkable.apply(this, args);
@@ -754,7 +770,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
           throw new Error("CaveBot goToPosition is unavailable");
         }
 
-        stepped = !!move.call(bot.cave, target);
+        stepped = !!move.call(bot.cave, waypoint);
         bot.log("cave Blue Flame CaveBot step issued", {
           index: index + 1,
           waypoint,
@@ -1221,7 +1237,13 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   if (originalAddWaypoint) {
     bot.cave.addWaypoint = (waypoint, options = {}) => {
       const selected = getSelectedWaypointActionOptions(options);
-      const added = originalAddWaypoint(waypoint);
+      let waypointToAdd = waypoint;
+      if (selected.action === blueFlameAction) {
+        const currentPosition = normalizePosition(bot.getPlayerPosition?.());
+        waypointToAdd = getDirectionalOffsetPosition(currentPosition, selected.useDirection, 1);
+        if (!waypointToAdd) return null;
+      }
+      const added = originalAddWaypoint(waypointToAdd);
       if (added) {
         setLastWaypointAction(selected.action);
         if (selected.action === useAction || selected.action === blueFlameAction) setLastWaypointUseDirection(selected.useDirection);
@@ -1238,7 +1260,15 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   if (originalAddWaypointCurrentSpot) {
     bot.cave.addWaypointCurrentSpot = (options = {}) => {
       const selected = getSelectedWaypointActionOptions(options);
-      const added = originalAddWaypointCurrentSpot();
+      let added = null;
+      if (selected.action === blueFlameAction) {
+        const currentPosition = normalizePosition(bot.getPlayerPosition?.());
+        const flamePosition = getDirectionalOffsetPosition(currentPosition, selected.useDirection, 1);
+        if (!flamePosition) return null;
+        added = originalAddWaypoint(flamePosition);
+      } else {
+        added = originalAddWaypointCurrentSpot();
+      }
       if (added) {
         setLastWaypointAction(selected.action);
         if (selected.action === useAction || selected.action === blueFlameAction) setLastWaypointUseDirection(selected.useDirection);
