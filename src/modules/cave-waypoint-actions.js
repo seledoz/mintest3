@@ -1304,11 +1304,19 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       const row = recordButton.closest(".mb-row");
       if (row) row.insertAdjacentElement("afterend", wrapper);
       else recordButton.insertAdjacentElement("afterend", wrapper);
-    } else if (!select.querySelector('option[value="ropeSpell"]')) {
-      const option = document.createElement("option");
-      option.value = ropeSpellAction;
-      option.textContent = "Rope Spell";
-      select.appendChild(option);
+    } else {
+      if (!select.querySelector('option[value="ropeSpell"]')) {
+        const option = document.createElement("option");
+        option.value = ropeSpellAction;
+        option.textContent = "Rope Spell";
+        select.appendChild(option);
+      }
+      if (!select.querySelector('option[value="blueFlame"]')) {
+        const option = document.createElement("option");
+        option.value = blueFlameAction;
+        option.textContent = "Blue Flame";
+        select.appendChild(option);
+      }
     }
 
     let useDirectionLabel=document.getElementById("minibia-bot-cave-use-direction")?.closest(".mb-field"); let useDirectionSelect=document.getElementById("minibia-bot-cave-use-direction");
