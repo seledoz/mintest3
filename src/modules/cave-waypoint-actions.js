@@ -815,7 +815,12 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       if (playerKey !== waypointPositionKey && playerKey !== blueFlameState.targetKey) {
         const status = bot.cave?.status?.();
         if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
-          bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+          // Preserve the CaveBot's actual travel direction when advancing.
+          // setCurrentIndex() can otherwise infer direction from the next
+          // index, which can flip the route on the second lap and make the
+          // Blue Flame re-entry use the wrong movement sequence.
+          const travelDirection = Number(status.direction) || 1;
+          bot.cave?.setCurrentIndex?.(getNextRouteIndex(status), travelDirection);
         }
         bot.log("cave Blue Flame teleport detected", {
           index: index + 1,
