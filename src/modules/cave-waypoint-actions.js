@@ -1062,7 +1062,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
 
     const playerPosition = normalizePosition(bot.getPlayerPosition?.());
-    if (action === useAction) {
+    if (action === useAction || action === blueFlameAction) {
       // Hard trace: this must appear whenever the Cavebot reaches a Use
       // waypoint. It tells us whether the action is actually being selected
       // before we investigate the mouse/tile dispatch.
@@ -1158,11 +1158,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       const added = originalAddWaypoint(waypoint);
       if (added) {
         setLastWaypointAction(selected.action);
-        if (selected.action === useAction) setLastWaypointUseDirection(selected.useDirection);
+        if (selected.action === useAction || selected.action === blueFlameAction) setLastWaypointUseDirection(selected.useDirection);
         bot.log("cave waypoint recorded with action", {
           index: bot.cave?.getRoute?.().length || 0,
           action: selected.action,
-          useDirection: selected.action === useAction ? normalizeUseDirection(selected.useDirection) : null,
+          useDirection: (selected.action === useAction || selected.action === blueFlameAction) ? normalizeUseDirection(selected.useDirection) : null,
         });
       }
       return added;
@@ -1387,7 +1387,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     }
     if (!select.__caveWaypointActionsRopeSpellAddBound) {
       recordButton.addEventListener("click", () => window.setTimeout(() => {
-        if (select.value === useAction && useDirectionSelect) setLastWaypointUseDirection(useDirectionSelect.value);
+        if ((select.value === useAction || select.value === blueFlameAction) && useDirectionSelect) setLastWaypointUseDirection(useDirectionSelect.value);
         if (select.value !== ropeSpellAction || !ropeSpellPendingHotkey) return;
         setWaypointRopeSpellHotkey(ropeSpellPendingHotkey);
         syncRopeSpellHotkeyVisibility();
