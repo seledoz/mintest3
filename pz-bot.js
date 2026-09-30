@@ -217,7 +217,7 @@
       const field=document.createElement("label"); field.className="mb-field";
       const label=document.createElement("span"); label.className="mb-field-label"; label.textContent="Waypoint Action";
       select=document.createElement("select"); select.id="minibia-bot-cave-waypoint-action";
-      [["walk","Walk"],["rope","Use Rope"],["ropeSpell","Rope Spell (Exani Tera)"],["haste","Haste Waypoint"],["shovel","Use Shovel"],["wait","Waypoint Wait (1 Minute)"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;select.appendChild(o)});
+      [["walk","Walk"],["rope","Use Rope"],["ropeSpell","Rope Spell (Exani Tera)"],["haste","Haste Waypoint"],["shovel","Use Shovel"],["wait","Waypoint Wait (1 Minute)"],["use","Use"],["blueFlame","Blue Flame"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;select.appendChild(o)});
       field.append(label,select); const row=add.closest(".mb-row"); if(row)row.insertAdjacentElement("afterend",field); else add.insertAdjacentElement("afterend",field);
     }
     if(!document.getElementById("minibia-bot-cave-haste-spell")){
