@@ -710,65 +710,48 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       if (now - blueFlameState.startedAt < USE_WAYPOINT_SETTLE_MS) return true;
       if (getPositionKey(playerPosition) !== waypointPositionKey) return true;
 
-      // Use the same native CaveBot/world pathfinder used for normal
-      // waypoint movement. Do not use the Arrow/D-pad movement module.
+      // Hand the one-square move back to CaveBot itself. This is the
+      // exact movement path used for ordinary waypoints; do not call the
+      // Arrow/D-pad module and do not bypass CaveBot's pathing layer.
       //
-      // A blue-flame tile is a walk-over teleport tile, but the game's tile
-      // object can report it as non-walkable. That makes the native pathfinder
-      // reject an otherwise valid one-square step. Temporarily make ONLY the
-      // requested destination passable while the synchronous native path
-      // request is built, then restore the tile immediately.
+      // Blue Flame is special because the destination can report
+      // isWalkable() === false even though walking onto it is what triggers
+      // the teleport. Patch the tile prototype for this one synchronous
+      // path request so CaveBot accepts the destination.
       let stepped = false;
-      let nativeResult = null;
-      let targetTile = null;
       let restoreWalkable = null;
       try {
-        const nativePathfinder = window.gameClient?.world?.pathfinder;
-        const findPath = nativePathfinder?.findPath;
-        if (typeof findPath === "function") {
-          const from = new Position(
-            playerPosition.x,
-            playerPosition.y,
-            playerPosition.z
-          );
-          const to = new Position(target.x, target.y, target.z);
-
-          try {
-            targetTile = window.gameClient?.world?.getTileFromWorldPosition?.(to) || null;
-          } catch (_) {}
-
-          if (targetTile && typeof targetTile.isWalkable === "function") {
-            const originalIsWalkable = targetTile.isWalkable;
-            const hadOwnIsWalkable = Object.prototype.hasOwnProperty.call(targetTile, "isWalkable");
-            try {
-              targetTile.isWalkable = function blueFlameTemporaryWalkable() {
-                return true;
-              };
-              restoreWalkable = () => {
-                try {
-                  if (hadOwnIsWalkable) targetTile.isWalkable = originalIsWalkable;
-                  else delete targetTile.isWalkable;
-                } catch (_) {}
-              };
-            } catch (_) {
-              restoreWalkable = null;
-            }
-          }
-
-          nativeResult = findPath.call(nativePathfinder, from, to);
-          stepped = true;
-          bot.log("cave Blue Flame native path step issued", {
-            index: index + 1,
-            waypoint,
-            direction,
-            target,
-            targetTileWasFound: !!targetTile,
-            nativeResultType: Array.isArray(nativeResult) ? "array" : typeof nativeResult,
-            nativeResultLength: Array.isArray(nativeResult) ? nativeResult.length : null,
-          });
+        const to = new Position(target.x, target.y, target.z);
+        const targetTile = window.gameClient?.world?.getTileFromWorldPosition?.(to) || null;
+        const prototype = targetTile && Object.getPrototypeOf(targetTile);
+        if (prototype && typeof prototype.isWalkable === "function") {
+          const originalIsWalkable = prototype.isWalkable;
+          const wrapper = function blueFlameTemporaryWalkable(...args) {
+            if (this === targetTile) return true;
+            return originalIsWalkable.apply(this, args);
+          };
+          prototype.isWalkable = wrapper;
+          restoreWalkable = () => {
+            try { prototype.isWalkable = originalIsWalkable; } catch (_) {}
+          };
         }
+
+        const move = bot.cave?.goToPosition;
+        if (typeof move !== "function") {
+          throw new Error("CaveBot goToPosition is unavailable");
+        }
+
+        stepped = !!move.call(bot.cave, target);
+        bot.log("cave Blue Flame CaveBot step issued", {
+          index: index + 1,
+          waypoint,
+          direction,
+          target,
+          targetTileWasFound: !!targetTile,
+          stepped,
+        });
       } catch (error) {
-        bot.log("cave Blue Flame native path step failed", {
+        bot.log("cave Blue Flame CaveBot step failed", {
           index: index + 1,
           waypoint,
           direction,
