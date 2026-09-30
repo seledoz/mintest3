@@ -24,6 +24,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   const waitDurationMs = 60 * 1000;
   const useDirectionStorageKey = "minibiaBot.cave.waypointUseDirections";
   const useAction = "use";
+  const blueFlameAction = "blueFlame";
   const useDirections = new Set(["N","NE","E","SE","S","SW","W","NW"]);
   let lastToolUseAt = 0;
   let lastUseWaypointUseAt = 0;
@@ -52,6 +53,15 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     completedKey: null,
   };
   const USE_WAYPOINT_SETTLE_MS = 100;
+  const blueFlameState = {
+    phase: "idle",
+    index: -1,
+    direction: "N",
+    waypointKey: null,
+    targetKey: null,
+    startedAt: 0,
+    deadlineAt: 0,
+  };
   const useWaypointState = {
     phase: "idle",
     index: -1,
@@ -69,7 +79,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   }
 
   function normalizeAction(action) {
-    if (action === ropeAction || action === ropeSpellAction || action === hasteAction || action === shovelAction || action === waitAction || action === useAction) return action;
+    if (action === ropeAction || action === ropeSpellAction || action === hasteAction || action === shovelAction || action === waitAction || action === useAction || action === blueFlameAction) return action;
     return noopAction;
   }
   function normalizeUseDirection(value) { const direction=String(value||"").trim().toUpperCase(); return useDirections.has(direction)?direction:"N"; }
@@ -647,6 +657,113 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     });
   }
 
+  function resetBlueFlameState() {
+    blueFlameState.phase = "idle";
+    blueFlameState.index = -1;
+    blueFlameState.direction = "N";
+    blueFlameState.waypointKey = null;
+    blueFlameState.targetKey = null;
+    blueFlameState.startedAt = 0;
+    blueFlameState.deadlineAt = 0;
+  }
+
+  function runBlueFlameWaypoint(index, waypoint, playerPosition) {
+    if (!waypoint || !playerPosition) return false;
+
+    const waypointKey = getActivePresetName() + ":" + index + ":" + getPositionKey(waypoint);
+    const direction = normalizeUseDirection(getWaypointUseDirections()[index]);
+    const target = getUseTargetPosition(waypoint, direction);
+    if (!target) return false;
+
+    // The waypoint itself is the staging tile. The bot must arrive exactly
+    // there, stop all normal movement, then take exactly one step in the
+    // configured direction onto the blue flame.
+    if (blueFlameState.index !== index ||
+        blueFlameState.waypointKey !== waypointKey ||
+        blueFlameState.direction !== direction) {
+      blueFlameState.phase = "ready";
+      blueFlameState.index = index;
+      blueFlameState.direction = direction;
+      blueFlameState.waypointKey = waypointKey;
+      blueFlameState.targetKey = getPositionKey(target);
+      blueFlameState.startedAt = 0;
+      blueFlameState.deadlineAt = 0;
+    }
+
+    const waypointPositionKey = getPositionKey(waypoint);
+    const playerKey = getPositionKey(playerPosition);
+
+    // Before the exact staging tile is reached, let CaveBot path normally.
+    if (playerKey !== waypointPositionKey && blueFlameState.phase !== "waiting") {
+      return false;
+    }
+
+    if (blueFlameState.phase === "ready") {
+      blueFlameState.startedAt = Date.now();
+      blueFlameState.phase = "settling";
+      stopCurrentMovement();
+      return true;
+    }
+
+    const now = Date.now();
+    if (blueFlameState.phase === "settling") {
+      if (now - blueFlameState.startedAt < USE_WAYPOINT_SETTLE_MS) return true;
+      if (getPositionKey(playerPosition) !== waypointPositionKey) return true;
+
+      const stepped = bot.caveArrowKeys?.stepToPosition?.(target);
+      if (!stepped) return true;
+
+      blueFlameState.phase = "waiting";
+      blueFlameState.deadlineAt = now + 5000;
+      stopCurrentMovement();
+      bot.log("cave Blue Flame stepped one square", {
+        index: index + 1,
+        waypoint,
+        direction,
+        target,
+      });
+      return true;
+    }
+
+    if (blueFlameState.phase === "waiting") {
+      // The step itself is not the completion event. Wait for the game to
+      // move the player away from the flame (including same-floor teleports).
+      if (playerKey !== waypointPositionKey && playerKey !== blueFlameState.targetKey) {
+        const status = bot.cave?.status?.();
+        if (status?.running && Math.trunc(Number(status.currentIndex) || 0) === index) {
+          bot.cave?.setCurrentIndex?.(getNextRouteIndex(status));
+        }
+        bot.log("cave Blue Flame teleport detected", {
+          index: index + 1,
+          from: waypoint,
+          steppedTo: target,
+          destination: playerPosition,
+          direction,
+        });
+        resetBlueFlameState();
+        return true;
+      }
+
+      if (now >= blueFlameState.deadlineAt) {
+        // Do not advance on timeout. Keep the waypoint active and allow the
+        // next tick to retry the one-square trigger.
+        blueFlameState.phase = "ready";
+        blueFlameState.startedAt = 0;
+        blueFlameState.deadlineAt = 0;
+        stopCurrentMovement();
+        bot.log("cave Blue Flame teleport not detected; retrying", {
+          index: index + 1,
+          waypoint,
+          direction,
+          target,
+        });
+      }
+      return true;
+    }
+
+    return true;
+  }
+
   function resetUseWaypointState() {
     useWaypointState.phase = "idle";
     useWaypointState.index = -1;
@@ -978,6 +1095,9 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       if (isAtWaypoint(playerPosition, waypoint)) startWaypointWait(status, index, waypoint);
       return;
     }
+    if (action === blueFlameAction) {
+      return runBlueFlameWaypoint(index, waypoint, playerPosition);
+    }
     if (action === useAction) {
       // Return the handler result so Cavebot's main tick knows the Use
       // waypoint is actively blocking normal waypoint movement.
@@ -1143,6 +1263,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     clearWaitTimer();
     resetRopeSpellState();
     resetUseWaypointState();
+    resetBlueFlameState();
   });
 
   function installPanelControls() {
@@ -1170,6 +1291,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
         [shovelAction, "Use Shovel"],
         [waitAction, "Waypoint Wait (1 Minute)"],
         [useAction, "Use"],
+        [blueFlameAction, "Blue Flame"],
       ].forEach(([value, text]) => {
         const option = document.createElement("option");
         option.value = value;
@@ -1191,7 +1313,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
 
     let useDirectionLabel=document.getElementById("minibia-bot-cave-use-direction")?.closest(".mb-field"); let useDirectionSelect=document.getElementById("minibia-bot-cave-use-direction");
     if(!useDirectionSelect){useDirectionLabel=document.createElement("label");useDirectionLabel.className="mb-field";const t=document.createElement("span");t.className="mb-field-label";t.textContent="Use Direction";useDirectionSelect=document.createElement("select");useDirectionSelect.id="minibia-bot-cave-use-direction";[["N","North"],["NE","North-East"],["E","East"],["SE","South-East"],["S","South"],["SW","South-West"],["W","West"],["NW","North-West"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;useDirectionSelect.appendChild(o);});useDirectionLabel.appendChild(t);useDirectionLabel.appendChild(useDirectionSelect);select.closest(".mb-field")?.insertAdjacentElement("afterend",useDirectionLabel);}
-    const syncUseDirectionVisibility=()=>{const isUse=select.value===useAction;if(useDirectionLabel)useDirectionLabel.style.display=isUse?"":"none";};
+    const syncUseDirectionVisibility=()=>{const isUse=select.value===useAction || select.value===blueFlameAction;if(useDirectionLabel)useDirectionLabel.style.display=isUse?"":"none";};
     if(useDirectionSelect&&!useDirectionSelect.__caveWaypointActionsUseBound){useDirectionSelect.addEventListener("change",()=>{if(select.value===useAction)setLastWaypointUseDirection(useDirectionSelect.value);});useDirectionSelect.__caveWaypointActionsUseBound=true;}
 
     let ropeSpellPendingHotkey = "";
@@ -1341,7 +1463,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   bot.cave.setWaypointHasteSpell = setWaypointHasteSpell;
   bot.cave.setLastWaypointHasteSpell = setLastWaypointHasteSpell;
   bot.cave.useRopeOnNearestHole = useRopeOnNearestHole;
-  bot.cave.isWaypointActionBlocking = (index) => { const action=getWaypointActions()[Math.trunc(Number(index)||0)]; return action===ropeSpellAction || action===useAction; };
+  bot.cave.isWaypointActionBlocking = (index) => { const action=getWaypointActions()[Math.trunc(Number(index)||0)]; return action===ropeSpellAction || action===useAction || action===blueFlameAction; };
   bot.cave.useShovelOnNearestHole = useShovelOnNearestHole;
   bot.cave.waypointWaitStatus = () => ({
     active: waitState.active,
