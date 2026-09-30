@@ -61,6 +61,7 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     targetKey: null,
     startedAt: 0,
     deadlineAt: 0,
+    restoreWalkable: null,
   };
   const useWaypointState = {
     phase: "idle",
@@ -658,6 +659,8 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
   }
 
   function resetBlueFlameState() {
+    try { blueFlameState.restoreWalkable?.(); } catch (_) {}
+    blueFlameState.restoreWalkable = null;
     blueFlameState.phase = "idle";
     blueFlameState.index = -1;
     blueFlameState.direction = "N";
@@ -719,20 +722,30 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
       // the teleport. Patch the tile prototype for this one synchronous
       // path request so CaveBot accepts the destination.
       let stepped = false;
-      let restoreWalkable = null;
       try {
         const to = new Position(target.x, target.y, target.z);
         const targetTile = window.gameClient?.world?.getTileFromWorldPosition?.(to) || null;
         const prototype = targetTile && Object.getPrototypeOf(targetTile);
+
+        // Keep the temporary walkability override installed until the native
+        // pathfinder has actually consumed the target. Restoring it
+        // immediately after findPath() can make the queued movement reject
+        // the blue-flame tile before the player ever takes the step.
+        try { blueFlameState.restoreWalkable?.(); } catch (_) {}
+        blueFlameState.restoreWalkable = null;
+
         if (prototype && typeof prototype.isWalkable === "function") {
           const originalIsWalkable = prototype.isWalkable;
+          const targetKey = getPositionKey(target);
           const wrapper = function blueFlameTemporaryWalkable(...args) {
-            if (this === targetTile) return true;
+            if (this === targetTile || getPositionKey(this?.__position || this?.position) === targetKey) return true;
             return originalIsWalkable.apply(this, args);
           };
           prototype.isWalkable = wrapper;
-          restoreWalkable = () => {
-            try { prototype.isWalkable = originalIsWalkable; } catch (_) {}
+          blueFlameState.restoreWalkable = () => {
+            try {
+              if (prototype.isWalkable === wrapper) prototype.isWalkable = originalIsWalkable;
+            } catch (_) {}
           };
         }
 
@@ -749,8 +762,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
           target,
           targetTileWasFound: !!targetTile,
           stepped,
+          walkabilityPatchHeld: !!blueFlameState.restoreWalkable,
         });
       } catch (error) {
+        try { blueFlameState.restoreWalkable?.(); } catch (_) {}
+        blueFlameState.restoreWalkable = null;
         bot.log("cave Blue Flame CaveBot step failed", {
           index: index + 1,
           waypoint,
@@ -758,8 +774,6 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
           target,
           error: error?.message || String(error),
         });
-      } finally {
-        try { restoreWalkable?.(); } catch (_) {}
       }
       if (!stepped) return true;
 
