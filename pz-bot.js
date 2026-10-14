@@ -194,7 +194,23 @@
       state.mode2StepStartPosition = null;
       state.mode2WaitingForStep = false;
     }`);}
-    if(path==="src/ui/panel.js"){code=code.replace(`  function refreshVisibleCreatures() {
+    if(path==="src/ui/panel.js"){
+      // Repair older panel sources at load time, before inject() captures the
+      // controls and wires their change handlers. Keep the max fields adjacent
+      // to their matching minimum fields, and only add them if they are absent.
+      if(!code.includes('id="minibia-bot-auto-heal-max-hp"')){
+        code=code.replace(
+          /(<input type="number" id="minibia-bot-auto-heal-min-hp"[^>]*\/>\s*<\/label>)/,
+          '$1<label class="mb-field"><span class="mb-field-label">HP Heal Max</span><input type="number" id="minibia-bot-auto-heal-max-hp" min="0" /></label>'
+        );
+      }
+      if(!code.includes('id="minibia-bot-auto-heal-max-mana"')){
+        code=code.replace(
+          /(<input type="number" id="minibia-bot-auto-heal-min-mana"[^>]*\/>\s*<\/label>)/,
+          '$1<label class="mb-field"><span class="mb-field-label">Mana Heal Max</span><input type="number" id="minibia-bot-auto-heal-max-mana" min="0" /></label>'
+        );
+      }
+      code=code.replace(`  function refreshVisibleCreatures() {
     const list = document.getElementById("minibia-bot-visible-creatures-list");
     if (!list) return;`,`  function refreshVisibleCreatures() {
     const list = document.getElementById("minibia-bot-visible-creatures-list");
@@ -205,7 +221,8 @@
     }, 1000);`).replace(`    const caveStatusTimerId = window.setInterval(() => {
       refreshCaveStatus();`,`    const caveStatusTimerId = window.setInterval(() => {
       if (isPanelCollapsed()) return;
-      refreshCaveStatus();`)}
+      refreshCaveStatus();`);
+    }
     return code;
   }
   function ensureCavebotWaypointActionPanel(){
