@@ -7,6 +7,7 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
     timerId: null,
     hpRetryTimerId: null,
     selectedHpThreshold: null,
+    selectedManaThreshold: null,
     lastHpHealAt: 0,
     lastManaHealAt: 0,
     lastHpAttemptAt: 0,
@@ -26,6 +27,7 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
       maxHp: 250,
       hpHotbarSlot: 1,
       minMana: 150,
+      maxMana: 150,
       manaHotbarSlot: 2,
       enabled: false,
     },
@@ -35,6 +37,9 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
   if (!Number.isFinite(Number(config.maxHp))) config.maxHp = Number(config.minHp) || 0;
   config.minHp = Math.max(0, Number(config.minHp) || 0);
   config.maxHp = Math.max(config.minHp, Number(config.maxHp) || 0);
+  if (!Number.isFinite(Number(config.maxMana))) config.maxMana = Number(config.minMana) || 0;
+  config.minMana = Math.max(0, Math.trunc(Number(config.minMana) || 0));
+  config.maxMana = Math.max(config.minMana, Math.trunc(Number(config.maxMana) || 0));
 
   if (!Number.isFinite(Number(config.healCooldownMs)) || Number(config.healCooldownMs) < 2040) config.healCooldownMs = 2040;
   if (!Number.isFinite(Number(config.manaCooldownMs)) || Number(config.manaCooldownMs) < 1050) config.manaCooldownMs = 1050;
@@ -55,6 +60,16 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
   function getHpThreshold() {
     if (state.selectedHpThreshold == null) return selectNextHpThreshold();
     return state.selectedHpThreshold;
+  }
+  function selectNextManaThreshold() {
+    const min = Math.max(0, Math.trunc(Number(config.minMana) || 0));
+    const max = Math.max(min, Math.trunc(Number(config.maxMana) || 0));
+    state.selectedManaThreshold = min + Math.floor(Math.random() * (max - min + 1));
+    return state.selectedManaThreshold;
+  }
+  function getManaThreshold() {
+    if (state.selectedManaThreshold == null) return selectNextManaThreshold();
+    return state.selectedManaThreshold;
   }
   function didManaHealSucceed(stats, attempt) { return !!stats?.mana && !!attempt && stats.mana.current > attempt.manaBefore; }
   function stopHpRetry() {
@@ -114,7 +129,7 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
     }
     const manaAttempt = state.pendingManaAttempt;
     if (manaAttempt) {
-      if (didManaHealSucceed(stats, manaAttempt)) { state.lastManaHealAt = manaAttempt.attemptedAt; state.pendingManaAttempt = null; bot.log("confirmed mana heal", { slot: manaAttempt.slot }); }
+      if (didManaHealSucceed(stats, manaAttempt)) { state.lastManaHealAt = manaAttempt.attemptedAt; state.pendingManaAttempt = null; const previousThreshold = getManaThreshold(); selectNextManaThreshold(); bot.log("confirmed mana heal", { slot: manaAttempt.slot, previousThreshold, nextThreshold: state.selectedManaThreshold }); }
       else if (now - manaAttempt.attemptedAt >= Math.max(50, Number(config.healConfirmMs) || 0)) { state.pendingManaAttempt = null; bot.log("mana heal did not register", { slot: manaAttempt.slot }); }
     }
   }
@@ -124,7 +139,7 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
   }
   function canUseManaHeal(now = Date.now(), stats = readStats()) {
     const { mana } = stats; const slot = normalizeHotbarSlot(config.manaHotbarSlot); if (!mana || !slot || state.pendingManaAttempt) return false;
-    return mana.current <= Math.max(0, Number(config.minMana) || 0) && now - state.lastManaHealAt >= config.manaCooldownMs && now - state.lastManaAttemptAt >= Math.max(50, Number(config.healRetryMs) || 0);
+    return mana.current <= getManaThreshold() && now - state.lastManaHealAt >= config.manaCooldownMs && now - state.lastManaAttemptAt >= Math.max(50, Number(config.healRetryMs) || 0);
   }
   function triggerHpHeal(now = Date.now(), stats = readStats()) {
     if (!canUseHpHeal(now, stats)) return false;
@@ -140,7 +155,7 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
   function triggerManaHeal(now = Date.now(), stats = readStats()) {
     if (!canUseManaHeal(now, stats)) return false;
     const slot = normalizeHotbarSlot(config.manaHotbarSlot); const clicked = bot.clickHotbar(slot - 1);
-    if (clicked) { state.lastManaAttemptAt = now; state.pendingManaAttempt = { attemptedAt: now, slot, hpBefore: Number(stats.hp?.current ?? 0), manaBefore: Number(stats.mana?.current ?? 0) }; bot.log("pressed mana heal hotkey", { slot, minMana: config.minMana }); }
+    if (clicked) { state.lastManaAttemptAt = now; state.pendingManaAttempt = { attemptedAt: now, slot, hpBefore: Number(stats.hp?.current ?? 0), manaBefore: Number(stats.mana?.current ?? 0) }; bot.log("pressed mana heal hotkey", { slot, threshold: getManaThreshold() }); }
     return clicked;
   }
   function tryHeal() {
@@ -157,7 +172,7 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
     if (!Number.isFinite(Number(config.healCooldownMs)) || Number(config.healCooldownMs) < 2040) config.healCooldownMs = 2040;
     if (!Number.isFinite(Number(config.manaCooldownMs)) || Number(config.manaCooldownMs) < 1050) config.manaCooldownMs = 1050;
     persistConfig(); if (state.running) { bot.log("auto heal already running"); return false; }
-    state.selectedHpThreshold = null; selectNextHpThreshold(); state.running = true; bot.log("auto heal started", { ...config, selectedHpThreshold: state.selectedHpThreshold }); tick(); return true;
+    state.selectedHpThreshold = null; selectNextHpThreshold(); state.selectedManaThreshold = null; selectNextManaThreshold(); state.running = true; bot.log("auto heal started", { ...config, selectedHpThreshold: state.selectedHpThreshold, selectedManaThreshold: state.selectedManaThreshold }); tick(); return true;
   }
   function stop(options = {}) {
     const shouldPersistEnabled = options.persistEnabled !== false; state.running = false;
@@ -166,13 +181,14 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
     if (shouldPersistEnabled) { config.enabled = false; persistConfig(); }
     bot.log("auto heal stopped"); return true;
   }
-  function status() { return { running: state.running, config: { ...config }, stats: readStats(), lastHpHealAt: state.lastHpHealAt, lastManaHealAt: state.lastManaHealAt, lastHpAttemptAt: state.lastHpAttemptAt, lastManaAttemptAt: state.lastManaAttemptAt, pendingHpAttempt: state.pendingHpAttempt ? { ...state.pendingHpAttempt } : null, pendingManaAttempt: state.pendingManaAttempt ? { ...state.pendingManaAttempt } : null, selectedHpThreshold: getHpThreshold() }; }
+  function status() { return { running: state.running, config: { ...config }, stats: readStats(), lastHpHealAt: state.lastHpHealAt, lastManaHealAt: state.lastManaHealAt, lastHpAttemptAt: state.lastHpAttemptAt, lastManaAttemptAt: state.lastManaAttemptAt, pendingHpAttempt: state.pendingHpAttempt ? { ...state.pendingHpAttempt } : null, pendingManaAttempt: state.pendingManaAttempt ? { ...state.pendingManaAttempt } : null, selectedHpThreshold: getHpThreshold(), selectedManaThreshold: getManaThreshold() }; }
   function updateConfig(nextConfig = {}) {
     if (Object.prototype.hasOwnProperty.call(nextConfig, "hpHotbarSlot")) nextConfig.hpHotbarSlot = normalizeHotbarSlot(nextConfig.hpHotbarSlot) ?? config.hpHotbarSlot;
     if (Object.prototype.hasOwnProperty.call(nextConfig, "manaHotbarSlot")) nextConfig.manaHotbarSlot = normalizeHotbarSlot(nextConfig.manaHotbarSlot);
     if (Object.prototype.hasOwnProperty.call(nextConfig, "minHp")) nextConfig.minHp = Math.max(0, Math.trunc(Number(nextConfig.minHp) || 0));
     if (Object.prototype.hasOwnProperty.call(nextConfig, "maxHp")) nextConfig.maxHp = Math.max(0, Math.trunc(Number(nextConfig.maxHp) || 0));
-    if (Object.prototype.hasOwnProperty.call(nextConfig, "minMana")) nextConfig.minMana = Math.max(0, Number(nextConfig.minMana) || 0);
+    if (Object.prototype.hasOwnProperty.call(nextConfig, "minMana")) nextConfig.minMana = Math.max(0, Math.trunc(Number(nextConfig.minMana) || 0));
+    if (Object.prototype.hasOwnProperty.call(nextConfig, "maxMana")) nextConfig.maxMana = Math.max(0, Math.trunc(Number(nextConfig.maxMana) || 0));
     if (Object.prototype.hasOwnProperty.call(nextConfig, "healCooldownMs")) nextConfig.healCooldownMs = Math.max(2040, Number(nextConfig.healCooldownMs) || 2040);
     if (Object.prototype.hasOwnProperty.call(nextConfig, "manaCooldownMs")) nextConfig.manaCooldownMs = Math.max(1050, Number(nextConfig.manaCooldownMs) || 1050);
     if (Object.prototype.hasOwnProperty.call(nextConfig, "healRetryMs")) nextConfig.healRetryMs = Math.max(50, Number(nextConfig.healRetryMs) || 50);
@@ -180,7 +196,10 @@ window.__minibiaBotBundle.installHealModule = function installHealModule(bot) {
     Object.assign(config, nextConfig, { tickMs: 75 });
     config.minHp = Math.max(0, Math.trunc(Number(config.minHp) || 0));
     config.maxHp = Math.max(config.minHp, Math.trunc(Number(config.maxHp) || 0));
+    config.minMana = Math.max(0, Math.trunc(Number(config.minMana) || 0));
+    config.maxMana = Math.max(config.minMana, Math.trunc(Number(config.maxMana) || 0));
     if (Object.prototype.hasOwnProperty.call(nextConfig, "minHp") || Object.prototype.hasOwnProperty.call(nextConfig, "maxHp")) selectNextHpThreshold();
+    if (Object.prototype.hasOwnProperty.call(nextConfig, "minMana") || Object.prototype.hasOwnProperty.call(nextConfig, "maxMana")) selectNextManaThreshold();
     if (!Number.isFinite(Number(config.healCooldownMs)) || Number(config.healCooldownMs) < 2040) config.healCooldownMs = 2040;
     if (!Number.isFinite(Number(config.manaCooldownMs)) || Number(config.manaCooldownMs) < 1050) config.manaCooldownMs = 1050;
     persistConfig(); bot.log("auto heal config updated", { ...config }); return { ...config };
