@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "name": "Vengoth Vamps V5",
+  "updatedAt": "2026-10-15T15:01:37.760Z",
+  "route": [
+    {
+      "x": 32966,
+      "y": 31456,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32965,
+      "y": 31448,
+      "z": 7,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32965,
+      "y": 31447,
+      "z": 8,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32961,
+      "y": 31452,
+      "z": 7,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32958,
+      "y": 31462,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32960,
+      "y": 31455,
+      "z": 5,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32968,
+      "y": 31463,
+      "z": 4,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32971,
+      "y": 31453,
+      "z": 3,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32961,
+      "y": 31461,
+      "z": 3,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32967,
+      "y": 31458,
+      "z": 2,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32967,
+      "y": 31455,
+      "z": 2,
+      "action": "use",
+      "useDirection": "N"
+    },
+    {
+      "x": 32967,
+      "y": 31457,
+      "z": 1,
+      "action": "walk",
+      "useDirection": "W"
+    },
+    {
+      "x": 32967,
+      "y": 31460,
+      "z": 1,
+      "action": "blueFlame",
+      "useDirection": "W"
+    },
+    {
+      "x": 32951,
+      "y": 31461,
+      "z": 6,
+      "action": "use",
+      "useDirection": "W"
+    },
+    {
+      "x": 32947,
+      "y": 31465,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32948,
+      "y": 31460,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    },
+    {
+      "x": 32948,
+      "y": 31461,
+      "z": 5,
+      "action": "walk",
+      "useDirection": "E"
+    },
+    {
+      "x": 32949,
+      "y": 31461,
+      "z": 6,
+      "action": "use",
+      "useDirection": "E"
+    },
+    {
+      "x": 32955,
+      "y": 31465,
+      "z": 6,
+      "action": "use",
+      "useDirection": "E"
+    },
+    {
+      "x": 32958,
+      "y": 31460,
+      "z": 6,
+      "action": "walk",
+      "useDirection": "N"
+    }
+  ],
+  "transitions": []
+}
