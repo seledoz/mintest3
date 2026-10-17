@@ -290,6 +290,9 @@ window.__minibiaBotBundle.installGithubWaypointLibraryModule = function installG
       bot.cave?.addWaypoint?.(waypoint, {
         action,
         useDirection,
+        // This is an existing saved waypoint, not a new interactive
+        // Blue Flame waypoint. Preserve its exact x/y/z coordinates.
+        preservePosition: true,
       });
       // Explicitly write the imported metadata back onto the live route.
       // This protects against load order where the CaveBot action wrapper
