@@ -1245,7 +1245,11 @@ window.__minibiaBotBundle.installCaveWaypointActionsModule = function installCav
     bot.cave.addWaypoint = (waypoint, options = {}) => {
       const selected = getSelectedWaypointActionOptions(options);
       let waypointToAdd = waypoint;
-      if (selected.action === blueFlameAction) {
+      // GitHub script loading passes preservePosition so saved Blue Flame
+      // coordinates (including floor z) are kept exactly. Only interactive
+      // waypoint creation should derive the flame tile from the player's
+      // current position.
+      if (selected.action === blueFlameAction && options.preservePosition !== true) {
         const currentPosition = normalizePosition(bot.getPlayerPosition?.());
         waypointToAdd = getDirectionalOffsetPosition(currentPosition, selected.useDirection, 1);
         if (!waypointToAdd) return null;
