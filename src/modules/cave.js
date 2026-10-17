@@ -1377,7 +1377,11 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         }
 
         if (targetTile && !(targetTile.x === playerPos.x && targetTile.y === playerPos.y)) {
-          const to = new Position(targetTile.x, targetTile.y, playerPos.z);
+          // Preserve the path node's actual floor. Forcing playerPos.z here
+          // makes cross-floor waypoints (for example a Blue Flame at z=1 while
+          // the player is on z=6) get sent to the same x/y on the wrong floor.
+          const targetFloor = Number.isFinite(Number(targetTile.z)) ? Number(targetTile.z) : playerPos.z;
+          const to = new Position(targetTile.x, targetTile.y, targetFloor);
           try {
             window.gameClient?.world?.pathfinder?.findPath?.(from, to);
             state.lastPathAt = now;
