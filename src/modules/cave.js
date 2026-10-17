@@ -241,8 +241,42 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return preset;
   }
 
+  function getWaypointCoordinateMismatches(left, right) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return [];
+    const mismatches = [];
+    for (let index = 0; index < left.length; index += 1) {
+      const a = normalizePosition(left[index]);
+      const b = normalizePosition(right[index]);
+      if (!a || !b || a.x !== b.x || a.y !== b.y || a.z !== b.z) mismatches.push(index);
+    }
+    return mismatches;
+  }
+
   const initialActivePreset = getActivePresetName();
-  if (loadPresetState(initialActivePreset)) {
+  const initialPreset = getPresetByName(initialActivePreset);
+  const startupCoordinateMismatches = initialPreset && route.length
+    ? getWaypointCoordinateMismatches(route, initialPreset.route)
+    : [];
+
+  // The legacy route is written whenever the live route changes. If it and
+  // the active named preset have the same number of waypoints but disagree
+  // on coordinates, prefer the live route instead of silently restoring stale
+  // preset coordinates (for example, a floor z from an older waypoint save).
+  // Keep the named preset synchronized so the bad coordinates do not return
+  // on the next reload.
+  if (initialPreset && route.length && route.length === initialPreset.route.length &&
+      startupCoordinateMismatches.length > 0) {
+    route = normalizeRoute(route);
+    transitions = normalizeTransitions(transitions);
+    upsertPreset(initialPreset.name, route, transitions);
+    setActivePresetName(initialPreset.name);
+    persistLegacyActivePreset();
+    bot.log("cave preset coordinate mismatch repaired from legacy route", {
+      preset: initialPreset.name,
+      waypointCount: route.length,
+      repairedWaypoints: startupCoordinateMismatches.map((index) => index + 1),
+    });
+  } else if (loadPresetState(initialActivePreset)) {
     config.activePresetName = initialActivePreset;
   } else {
     setActivePresetName(initialActivePreset);
