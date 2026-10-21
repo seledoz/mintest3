@@ -166,6 +166,12 @@ window.__minibiaBotBundle.installFireballModule = function installFireballModule
     const best = state.currentBest || calculateBestCandidate();
     state.currentBest = best;
     if (!canCast(now, best)) return false;
+    const gfbPriority = bot.greatFireballV2;
+    if (gfbPriority?.shouldReservePriority?.()) {
+      bot.logDebug?.("blocked Fireball cast by GFB Highest Priority", { fireballSlot: config.hotbarSlot, gfbSlot: gfbPriority.config?.hotbarSlot, monsterCount: best?.count || 0 });
+      refreshUi();
+      return false;
+    }
     const fired = fireCrosshairAt(best);
     if (fired) {
       state.lastCastAt = now;
