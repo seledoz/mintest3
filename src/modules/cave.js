@@ -380,7 +380,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function isFireFieldTileForCavePathing(tile) {
     if (!tile) return false;
     for (const thing of getTileThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
       if (FIRE_FIELD_IDS.has(id)) return true;
       const definition = getThingDefinition(thing?.id);
       const text = [
@@ -400,7 +400,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function isTileWithAlwaysWalkableFireFieldId(tile) {
     if (!tile) return false;
     for (const thing of getTileThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
       if (ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id)) return true;
     }
     return false;
@@ -409,7 +409,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   function isPoisonFieldTileForCavePathing(tile) {
     if (!tile) return false;
     for (const thing of getTileThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
       if (POISON_FIELD_IDS.has(id)) return true;
       const definition = getThingDefinition(thing?.id);
       const text = [
