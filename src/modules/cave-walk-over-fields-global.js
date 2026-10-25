@@ -129,6 +129,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
           "walkable", "walkableTile", "passable", "pathable",
           "blocking", "blocksMovement", "blocksWalk", "blockMovement",
           "block", "blocks", "unwalkable", "impassable",
+          "notPathable", "isNotPathable", "hasNotPathableFlag",
         ];
         const original = {};
         let changed = false;
@@ -137,7 +138,8 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
           original[key] = props[key];
           if (key === "blocking" || key === "blocksMovement" || key === "blocksWalk" ||
               key === "blockMovement" || key === "block" || key === "blocks" ||
-              key === "unwalkable" || key === "impassable") {
+              key === "unwalkable" || key === "impassable" ||
+              key === "notPathable" || key === "isNotPathable" || key === "hasNotPathableFlag") {
             props[key] = false;
           } else {
             props[key] = true;
@@ -244,7 +246,11 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
     // The native pathfinder can use several collision predicates. Make field
     // tiles passable to all of them before every native path request.
-    const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk"];
+    const predicates = [
+      "isWalkable", "isPassable", "isPathable", "isNotPathable",
+      "isBlocking", "blocksMovement", "canWalk", "blocksPath",
+      "blocksPathfinding", "hasNotPathableFlag", "hasFlag",
+    ];
     let patched = false;
     for (const name of predicates) {
       if (typeof prototype[name] !== "function" || prototype[name].__globalCaveFieldWalkable) continue;
@@ -253,7 +259,17 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         const status = bot.cave?.status?.();
         if (isAlwaysWalkableFieldTile(this) ||
             (status?.config?.walkOverFields && isFireFieldTile(this))) {
-          if (name === "isBlocking" || name === "blocksMovement") return false;
+          // Minibia's native pathfinder can reject a magic field through its
+          // NotPathable flag even after isWalkable() has been made true.
+          // Only suppress that one collision flag on recognized damage fields.
+          if (name === "hasFlag") {
+            const requestedFlag = Number(args[0]);
+            if (Number.isFinite(requestedFlag) && (requestedFlag & 32768) !== 0) return false;
+            return original.apply(this, args);
+          }
+          if (name === "isNotPathable" || name === "hasNotPathableFlag" ||
+              name === "isBlocking" || name === "blocksMovement" ||
+              name === "blocksPath" || name === "blocksPathfinding") return false;
           return true;
         }
         return original.apply(this, args);
