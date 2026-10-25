@@ -1348,6 +1348,50 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
     const now = Date.now();
 
+    // All CaveBot pathing modes use a field-aware route when the corridor
+    // crosses damage fields. A* validates walkability, then the native game
+    // pathfinder is asked to move only to the next adjacent tile. This avoids
+    // submitting a long route to native collision checks that reject fields.
+    // Movement still uses the game's pathfinder; no arrow-key/direct-key pathing.
+    const fieldFrom = normalizePosition(from);
+    const fieldGoal = normalizePosition(waypoint);
+    if (fieldFrom && fieldGoal && fieldFrom.z === fieldGoal.z) {
+      const fieldPath = findPathAStar(fieldFrom, fieldGoal);
+      const usesDamageField = Array.isArray(fieldPath) && fieldPath.some((position) => {
+        const tile = getTileAt(position);
+        return isTileWithAlwaysWalkableFireFieldId(tile) ||
+          isPoisonFieldTileForCavePathing(tile) ||
+          (config.walkOverFields && isFireFieldTileForCavePathing(tile));
+      });
+      if (usesDamageField && fieldPath.length > 1) {
+        const nextStep = normalizePosition(fieldPath[1]);
+        if (nextStep && nextStep.z === fieldFrom.z) {
+          try {
+            const nativePathfinder = window.gameClient?.world?.pathfinder;
+            if (typeof nativePathfinder?.findPath === "function") {
+              nativePathfinder.findPath(from, new Position(nextStep.x, nextStep.y, nextStep.z));
+              state.lastPathAt = now;
+              bot.logDebug("cave field-aware native step", {
+                from: fieldFrom,
+                to: nextStep,
+                waypoint: fieldGoal,
+                pathfinderMode: config.pathfinderMode,
+                routeLength: fieldPath.length,
+                damageFieldRoute: true,
+              });
+              return true;
+            }
+          } catch (error) {
+            bot.logDebug("cave field-aware native step failed", {
+              from: fieldFrom,
+              to: nextStep,
+              error: error?.message || String(error),
+            });
+          }
+        }
+      }
+    }
+
     {
       const fromPos = normalizePosition(from);
       const waypointPos = normalizePosition(waypoint);
