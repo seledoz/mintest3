@@ -21,7 +21,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   const state = { timerId: null, installed: false, patchedTiles: new Set() };
 
   function getDefinition(thing) {
-    const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+    const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
     if (!Number.isFinite(id)) return null;
     const client = window.gameClient;
     return client?.itemDefinitionsByCid?.[id]
@@ -52,7 +52,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
   function isAlwaysWalkableFireFieldTile(tile) {
     for (const thing of getThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
       if (ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id)) return true;
     }
     return false;
@@ -60,12 +60,14 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
   function isPoisonFieldTile(tile) {
     for (const thing of getThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
       if (POISON_FIELD_IDS.has(id)) return true;
       const definition = getDefinition(thing);
       const text = [
         thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
         thing?.type, thing?.thingType, thing?.category,
+        thing?.properties?.name, thing?.properties?.field,
+        thing?.properties?.type, thing?.properties?.category,
         definition?.name, definition?.properties?.name,
         definition?.properties?.field, definition?.properties?.type,
         definition?.properties?.category,
@@ -81,12 +83,14 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
   function isFireFieldTile(tile) {
     for (const thing of getThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId);
+      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
       if (FIRE_FIELD_IDS.has(id)) return true;
       const definition = getDefinition(thing);
       const text = [
         thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
         thing?.type, thing?.thingType, thing?.category,
+        thing?.properties?.name, thing?.properties?.field,
+        thing?.properties?.type, thing?.properties?.category,
         definition?.name, definition?.properties?.name,
         definition?.properties?.field, definition?.properties?.type,
         definition?.properties?.category,
