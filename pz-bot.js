@@ -143,6 +143,27 @@
     select.replaceChildren();
     for(const [value,label] of desired){const option=document.createElement("option");option.value=value;option.textContent=label;select.appendChild(option);}
     select.value=desired.some(([value])=>value===current)?current:"game";
+
+    // Recovery guard: ensure the damage-field checkbox is visible even if an older
+    // panel template was installed by a stale script.
+    const caveBot=window.minibiaBot;
+    let fields=document.getElementById("minibia-bot-cave-walk-over-fields");
+    if(!fields){
+      const label=document.createElement("label");
+      label.className="mb-toggle";
+      fields=document.createElement("input");
+      fields.type="checkbox";
+      fields.id="minibia-bot-cave-walk-over-fields";
+      const caption=document.createElement("span");
+      caption.textContent="Walk through damage fields";
+      label.append(fields,caption);
+      select.closest(".mb-field")?.before(label);
+    }
+    if(fields && !fields.dataset.damageFieldToggleBound){
+      fields.dataset.damageFieldToggleBound="true";
+      fields.addEventListener("change",()=>{caveBot?.cave?.updateConfig?.({walkOverFields:fields.checked});});
+    }
+    if(fields)fields.checked=!!caveBot?.cave?.status?.()?.config?.walkOverFields;
   }
   function addSafeUiPerformanceOptimizations(code,path){
     if(path==="src/core.js")code=code.replace("  startReconnectWatcher();","  // Reconnect watcher temporarily disabled for FPS testing.");
