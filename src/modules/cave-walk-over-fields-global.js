@@ -126,8 +126,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         // is disabled, because the native pathfinder may use item-definition
         // collision flags instead of the tile isWalkable() wrapper.
         const isPoison = POISON_FIELD_IDS.has(id);
-        const alwaysWalkable = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) ||
-          ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || isPoison;
+        const alwaysWalkable = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id);
         if (!definition || definitionPatches.has(definition)) continue;
         if (!enabled && !alwaysWalkable) continue;
         const props = definition.properties && typeof definition.properties === "object"
@@ -157,7 +156,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         if (changed) definitionPatches.set(definition, {
           props,
           original,
-          alwaysWalkable: ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || isPoison,
+          alwaysWalkable: ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id),
         });
       }
     }
