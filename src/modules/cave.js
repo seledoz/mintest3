@@ -377,11 +377,11 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return null;
   }
 
-  function isFireFieldTileForCavePathing(tile) {
+  function isDamageFieldTile(tile) {
     if (!tile) return false;
     for (const thing of getTileThings(tile)) {
       const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
-      if (FIRE_FIELD_IDS.has(id)) return true;
+      if (FIRE_FIELD_IDS.has(id) || POISON_FIELD_IDS.has(id)) return true;
       const definition = getThingDefinition(thing?.id);
       const text = [
         thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
@@ -392,9 +392,14 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         definition?.properties?.field, definition?.properties?.type,
         definition?.properties?.category,
       ].filter(Boolean).map(String).join(" ");
-      if (FIRE_FIELD_PATTERN.test(text) || /\bfire\s*field\b/i.test(text)) return true;
+      if (FIRE_FIELD_PATTERN.test(text) || POISON_FIELD_PATTERN.test(text) ||
+          /\bfire\s*field\b/i.test(text) || /\bpoison\s*field\b/i.test(text)) return true;
     }
     return false;
+  }
+
+  function isFireFieldTileForCavePathing(tile) {
+    return isDamageFieldTile(tile) && !isPoisonFieldTileForCavePathing(tile);
   }
 
   function isTileWithAlwaysWalkableFireFieldId(tile) {
@@ -439,8 +444,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const original = prototype.isWalkable;
     const wrapper = function caveBotWalkOverFieldsIsWalkable(...args) {
       if (isTileWithAlwaysWalkableFireFieldId(this) ||
-          isPoisonFieldTileForCavePathing(this) ||
-          (config.walkOverFields && isFireFieldTileForCavePathing(this))) return true;
+          (config.walkOverFields && isDamageFieldTile(this))) return true;
       return original.apply(this, args);
     };
     wrapper.__caveBotWalkOverFieldsApplied = true;
@@ -467,8 +471,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
           const key = `${tile.__position.x},${tile.__position.y}`;
           const walkable = tile.isWalkable ? tile.isWalkable() : false;
           matrix.set(key, isTileWithAlwaysWalkableFireFieldId(tile) ||
-            isPoisonFieldTileForCavePathing(tile) ||
-            (config.walkOverFields && isFireFieldTileForCavePathing(tile)) ? true : walkable);
+            (config.walkOverFields && isDamageFieldTile(tile)) ? true : walkable);
         }
       }
     } catch (e) {
@@ -1294,7 +1297,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
   function pathContainsPoisonField(path) {
     if (!Array.isArray(path)) return false;
-    return path.some((position) => isPoisonFieldTileForCavePathing(getTileAt(position)));
+    return config.walkOverFields && path.some((position) => isDamageFieldTile(getTileAt(position)));
   }
 
   function stepAlongPoisonFieldPath(path, fromPos) {
@@ -1305,7 +1308,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const nextPos = normalizePosition(next);
     if (!nextPos || nextPos.z !== fromPos.z) return false;
     const tile = getTileAt(nextPos);
-    if (!(isPoisonFieldTileForCavePathing(tile) || !!tile?.isWalkable?.())) return false;
+    if (!(config.walkOverFields && isDamageFieldTile(tile)) && !tile?.isWalkable?.()) return false;
     if (!bot.caveArrowKeys?.stepToPosition?.(nextPos)) return false;
     state.lastPathAt = Date.now();
     bot.logDebug("cave stepped onto/through poison field", { from: fromPos, to: nextPos, poisonFieldRoute: true });
@@ -1360,8 +1363,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const usesDamageField = Array.isArray(fieldPath) && fieldPath.some((position) => {
         const tile = getTileAt(position);
         return isTileWithAlwaysWalkableFireFieldId(tile) ||
-          isPoisonFieldTileForCavePathing(tile) ||
-          (config.walkOverFields && isFireFieldTileForCavePathing(tile));
+          (config.walkOverFields && isDamageFieldTile(tile));
       });
       if (usesDamageField && fieldPath.length > 1) {
         const nextStep = normalizePosition(fieldPath[1]);
