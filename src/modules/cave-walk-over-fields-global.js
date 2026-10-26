@@ -78,7 +78,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   }
 
   function isAlwaysWalkableFieldTile(tile) {
-    return isAlwaysWalkableFireFieldTile(tile) || isPoisonFieldTile(tile);
+    return isAlwaysWalkableFireFieldTile(tile);
   }
 
   function isFireFieldTile(tile) {
@@ -98,6 +98,10 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       if (FIRE_FIELD_PATTERN.test(text) || /\bfire\s*field\b/i.test(text)) return true;
     }
     return false;
+  }
+
+  function isDamageFieldTile(tile) {
+    return isFireFieldTile(tile) || isPoisonFieldTile(tile);
   }
 
   const definitionPatches = new Map();
@@ -122,8 +126,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         // is disabled, because the native pathfinder may use item-definition
         // collision flags instead of the tile isWalkable() wrapper.
         const isPoison = POISON_FIELD_IDS.has(id);
-        const alwaysWalkable = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) ||
-          ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || isPoison;
+        const alwaysWalkable = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id);
         if (!definition || definitionPatches.has(definition)) continue;
         if (!enabled && !alwaysWalkable) continue;
         const props = definition.properties && typeof definition.properties === "object"
@@ -153,7 +156,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         if (changed) definitionPatches.set(definition, {
           props,
           original,
-          alwaysWalkable: ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || isPoison,
+          alwaysWalkable: ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id),
         });
       }
     }
@@ -181,7 +184,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
   function patchFieldObject(object, bot) {
     if (!object || typeof object !== "object") return false;
-    const alwaysWalkable = isAlwaysWalkableFieldTile(object) || isFireFieldTile(object);
+    const alwaysWalkable = isAlwaysWalkableFieldTile(object) || (bot.cave?.status?.()?.config?.walkOverFields && isDamageFieldTile(object));
     if (!alwaysWalkable) return false;
     let changed = false;
     const patchContainer = (target) => {
@@ -208,7 +211,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       if (typeof object[name] !== "function" || object[name].__globalCaveFieldWalkable) continue;
       const original = object[name];
       const wrapper = function globalCaveFieldObjectPassability(...args) {
-        if (isAlwaysWalkableFieldTile(this) || (bot.cave?.status?.()?.config?.walkOverFields && isFireFieldTile(this))) {
+        if (isAlwaysWalkableFieldTile(this) || (bot.cave?.status?.()?.config?.walkOverFields && isDamageFieldTile(this))) {
           return name === "isBlocking" || name === "blocksMovement" || name === "blocksPath" || name === "blocksPathfinding" ? false : true;
         }
         return original.apply(this, args);
@@ -226,7 +229,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const wrapper = function globalCaveFieldWalkable(...args) {
       const status = bot.cave?.status?.();
       if (isAlwaysWalkableFieldTile(this) ||
-          (status?.config?.walkOverFields && isFireFieldTile(this))) return true;
+          (status?.config?.walkOverFields && isDamageFieldTile(this))) return true;
       return original.apply(this, args);
     };
     wrapper.__globalCaveFieldWalkable = true;
