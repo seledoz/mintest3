@@ -1297,7 +1297,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
   function pathContainsPoisonField(path) {
     if (!Array.isArray(path)) return false;
-    return config.walkOverFields && path.some((position) => isDamageFieldTile(getTileAt(position)));
+    return path.some((position) => isPoisonFieldTileForCavePathing(getTileAt(position)));
   }
 
   function stepAlongPoisonFieldPath(path, fromPos) {
@@ -1308,7 +1308,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     const nextPos = normalizePosition(next);
     if (!nextPos || nextPos.z !== fromPos.z) return false;
     const tile = getTileAt(nextPos);
-    if (!(config.walkOverFields && isDamageFieldTile(tile)) && !tile?.isWalkable?.()) return false;
+    if (!(isPoisonFieldTileForCavePathing(tile) || !!tile?.isWalkable?.())) return false;
     if (!bot.caveArrowKeys?.stepToPosition?.(nextPos)) return false;
     state.lastPathAt = Date.now();
     bot.logDebug("cave stepped onto/through poison field", { from: fromPos, to: nextPos, poisonFieldRoute: true });
@@ -1363,7 +1363,8 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       const usesDamageField = Array.isArray(fieldPath) && fieldPath.some((position) => {
         const tile = getTileAt(position);
         return isTileWithAlwaysWalkableFireFieldId(tile) ||
-          (config.walkOverFields && isDamageFieldTile(tile));
+          isPoisonFieldTileForCavePathing(tile) ||
+          (config.walkOverFields && isFireFieldTileForCavePathing(tile));
       });
       if (usesDamageField && fieldPath.length > 1) {
         const nextStep = normalizePosition(fieldPath[1]);
