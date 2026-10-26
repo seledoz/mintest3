@@ -35,27 +35,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     /\bgravel pile\b/i,
     /\bdirt pile\b/i,
   ];
-  // CaveBot field walking uses the same fire-field definition as the
-  // existing "Walk Over Fields" toggle. When enabled, pathfinding treats
-  // fire-field tiles as walkable instead of returning "no way".
-  // Support both the classic Tibia field IDs and the older OTServer-style IDs.
-  const FIRE_FIELD_IDS = new Set([
-    1487, 1488, 1489,
-    1492, 1493, 1494,
-    1500, 1501, 1502,
-    2118, 2119, 2120,
-    2123, 2124, 2125,
-    2131, 2132, 2133,
-  ]);
-  const FIRE_FIELD_PATTERN = /(?:fire|flame)\s*(?:field|wall|damage|ground|tile)/i;
-  // Poison fields are intentionally treated as walkable by CaveBot. They are
-  // damage tiles, not blockers, so pathing must be allowed to cross them.
-  // Classic Tibia poison-field stages. Some servers use the newer 1503 stage too.
-  const POISON_FIELD_IDS = new Set([2127]);
-  const POISON_FIELD_PATTERN = /(?:poison|venom)\s*(?:field|wall|damage|ground|tile)/i;
-  // These three fire-field stages are always treated as ordinary walkable
-  // squares by every CaveBot pathing mode, independent of the Walk Over Fields toggle.
-  const ALWAYS_WALKABLE_FIRE_FIELD_IDS = new Set([2123, 2124, 2125]);
+  // Damage-field recognition ported from MINIBIA-BOT-CONSOLE.js.
   const state = {
     running: false,
     timerId: null,
@@ -94,8 +74,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       enabled: false,
       activePresetName: defaultPresetName,
       pathfinderMode: 'game',
-      walkOverFields: false,
-    },
+},
     bot.storage.get(configStorageKey, {})
   );
   config.tickMs = 200;
@@ -378,80 +357,14 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
 
   function isDamageFieldTile(tile) {
-    if (!tile) return false;
-    for (const thing of getTileThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
-      if (FIRE_FIELD_IDS.has(id) || POISON_FIELD_IDS.has(id)) return true;
-      const definition = getThingDefinition(thing?.id);
-      const text = [
-        thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
-        thing?.type, thing?.thingType, thing?.category,
-        thing?.properties?.name, thing?.properties?.field,
-        thing?.properties?.type, thing?.properties?.category,
-        definition?.name, definition?.properties?.name,
-        definition?.properties?.field, definition?.properties?.type,
-        definition?.properties?.category,
-      ].filter(Boolean).map(String).join(" ");
-      if (FIRE_FIELD_PATTERN.test(text) || POISON_FIELD_PATTERN.test(text) ||
-          /\bfire\s*field\b/i.test(text) || /\bpoison\s*field\b/i.test(text)) return true;
-    }
-    return false;
-  }
-
-  function isFireFieldTileForCavePathing(tile) {
-    return isDamageFieldTile(tile) && !isPoisonFieldTileForCavePathing(tile);
-  }
-
-  function isTileWithAlwaysWalkableFireFieldId(tile) {
-    if (!tile) return false;
-    for (const thing of getTileThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
-      if (ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id)) return true;
-    }
-    return false;
-  }
-
-  function isPoisonFieldTileForCavePathing(tile) {
-    if (!tile) return false;
-    for (const thing of getTileThings(tile)) {
-      const id = Number(thing?.id ?? thing?.itemId ?? thing?.serverId ?? thing?.clientId ?? thing?.sid ?? thing?.cid ?? thing?.typeId);
-      if (POISON_FIELD_IDS.has(id)) return true;
-      const definition = getThingDefinition(thing?.id);
-      const text = [
-        thing?.name, thing?.itemName, thing?.field, thing?.fieldType,
-        thing?.type, thing?.thingType, thing?.category,
-        thing?.properties?.name, thing?.properties?.field,
-        thing?.properties?.type, thing?.properties?.category,
-        definition?.name, definition?.properties?.name,
-        definition?.properties?.field, definition?.properties?.type,
-        definition?.properties?.category,
-      ].filter(Boolean).map(String).join(" ");
-      if (POISON_FIELD_PATTERN.test(text) || /\bpoison\s*field\b/i.test(text)) return true;
-    }
-    return false;
-  }
-
-  function patchFieldWalkabilityForCavePathing() {
-    const position = normalizePosition(bot.getPlayerPosition());
-    if (!position) return false;
-    let tile = null;
-    try {
-      tile = getTileAt(position);
-    } catch (_) {}
-    const prototype = tile && Object.getPrototypeOf(tile);
-    if (!prototype || typeof prototype.isWalkable !== "function") return false;
-    if (prototype.__caveBotWalkOverFieldsApplied) return true;
-    const original = prototype.isWalkable;
-    const wrapper = function caveBotWalkOverFieldsIsWalkable(...args) {
-      if (isTileWithAlwaysWalkableFireFieldId(this) ||
-          (config.walkOverFields && isDamageFieldTile(this))) return true;
-      return original.apply(this, args);
-    };
-    wrapper.__caveBotWalkOverFieldsApplied = true;
-    wrapper.__caveBotWalkOverFieldsOriginal = original;
-    prototype.isWalkable = wrapper;
-    prototype.__caveBotWalkOverFieldsApplied = true;
-    return true;
+    return getTileThings(tile).some((thing) => {
+      // getThingDefinition accepts an item ID, not the item object itself.
+      // The uploaded bot resolves definitions from thing.id.
+      const properties = getThingDefinition(thing?.id)?.properties || {};
+      const fieldType = String(properties.field || properties.name || "").trim().toLowerCase();
+      return String(properties.type || "").trim().toLowerCase() === "magicfield" &&
+        ["poison", "fire", "energy", "poison field", "fire field", "energy field"].includes(fieldType);
+    });
   }
 
   function getAStarWalkabilityMatrix(position, z) {
@@ -469,9 +382,9 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
         for (const tile of chunk.tiles) {
           if (!tile?.__position || tile.__position.z !== z) continue;
           const key = `${tile.__position.x},${tile.__position.y}`;
-          const walkable = tile.isWalkable ? tile.isWalkable() : false;
-          matrix.set(key, isTileWithAlwaysWalkableFireFieldId(tile) ||
-            (config.walkOverFields && isDamageFieldTile(tile)) ? true : walkable);
+          const damageField = isDamageFieldTile(tile) && !isFloorChangeTile(tile) && !tile.isOccupied?.();
+      const walkable = tile.isWalkable ? tile.isWalkable() : false;
+      matrix.set(key, damageField || walkable);
         }
       }
     } catch (e) {
@@ -504,7 +417,6 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
   }
 
   function findPathAStar(from, to) {
-    patchFieldWalkabilityForCavePathing();
     from = normalizePosition(from);
     to = normalizePosition(to);
     if (!from || !to) return null;
@@ -1227,170 +1139,37 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
     return true;
   }
 
-  function pathContainsAlwaysWalkableFireField(path) {
-    if (!Array.isArray(path)) return false;
-    return path.some((position) => {
-      const tile = getTileAt(position);
-      return isTileWithAlwaysWalkableFireFieldId(tile);
-    });
-  }
-
-  function hasAlwaysWalkableFireFieldBetween(fromPos, toPos) {
-    if (!fromPos || !toPos || fromPos.z !== toPos.z) return false;
-    const dx = Math.sign(toPos.x - fromPos.x);
-    const dy = Math.sign(toPos.y - fromPos.y);
-    let x = fromPos.x;
-    let y = fromPos.y;
-    const maxSteps = Math.max(Math.abs(toPos.x - fromPos.x), Math.abs(toPos.y - fromPos.y));
-    for (let step = 0; step <= maxSteps; step += 1) {
-      const tile = getTileAt({ x, y, z: fromPos.z });
-      if (isTileWithAlwaysWalkableFireFieldId(tile)) return true;
-      if (x === toPos.x && y === toPos.y) break;
-      // For cardinal routes this follows the exact corridor. For diagonal
-      // routes it advances both axes, which is sufficient to detect a
-      // fire-field waypoint/corridor before native pathing is attempted.
-      if (x !== toPos.x) x += dx;
-      if (y !== toPos.y) y += dy;
-    }
-    return false;
-  }
-
-  function stepDirectlyTowardFireFieldWaypoint(fromPos, toPos) {
-    if (!fromPos || !toPos || fromPos.z !== toPos.z) return false;
-    const dx = toPos.x - fromPos.x;
-    const dy = toPos.y - fromPos.y;
-    if (dx === 0 && dy === 0) return false;
-
-    // Prefer the larger axis so a diagonal route progresses deterministically.
-    let next = null;
-    if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
-      next = { x: fromPos.x + Math.sign(dx), y: fromPos.y, z: fromPos.z };
-    } else if (dy !== 0) {
-      next = { x: fromPos.x, y: fromPos.y + Math.sign(dy), z: fromPos.z };
-    }
-    if (!next) return false;
-
-    const tile = getTileAt(next);
-    const passable = isTileWithAlwaysWalkableFireFieldId(tile) || !!tile?.isWalkable?.();
-    if (!passable) return false;
-
-    const stepped = bot.caveArrowKeys?.stepToPosition?.(next);
-    if (!stepped) return false;
-
-    state.lastPathAt = Date.now();
-    bot.log("cave direct fire-field route step", {
-      from: fromPos,
-      to: next,
-      waypoint: toPos,
-      fireFieldRoute: true,
-    });
-    return true;
-  }
-
-  function pathContainsFireField(path) {
-    if (!config.walkOverFields || !Array.isArray(path)) return false;
-    return path.some((position) => {
-      const tile = getTileAt(position);
-      return isFireFieldTileForCavePathing(tile);
-    });
-  }
-
-  function pathContainsPoisonField(path) {
-    if (!Array.isArray(path)) return false;
-    return path.some((position) => isPoisonFieldTileForCavePathing(getTileAt(position)));
-  }
-
-  function stepAlongPoisonFieldPath(path, fromPos) {
-    if (!Array.isArray(path) || !fromPos) return false;
-    const next = path.find((position) => position &&
-      (position.x !== fromPos.x || position.y !== fromPos.y || position.z !== fromPos.z));
-    if (!next) return false;
-    const nextPos = normalizePosition(next);
-    if (!nextPos || nextPos.z !== fromPos.z) return false;
-    const tile = getTileAt(nextPos);
-    if (!(isPoisonFieldTileForCavePathing(tile) || !!tile?.isWalkable?.())) return false;
-    if (!bot.caveArrowKeys?.stepToPosition?.(nextPos)) return false;
-    state.lastPathAt = Date.now();
-    bot.logDebug("cave stepped onto/through poison field", { from: fromPos, to: nextPos, poisonFieldRoute: true });
-    return true;
-  }
-
-  function stepAlongWalkOverFieldPath(path, fromPos) {
-    if (!Array.isArray(path) || !fromPos) return false;
-    const next = path.find((position) => {
-      if (!position) return false;
-      return position.x !== fromPos.x || position.y !== fromPos.y || position.z !== fromPos.z;
-    });
-    if (!next) return false;
-
-    const nextPos = normalizePosition(next);
-    if (!nextPos || nextPos.z !== fromPos.z) return false;
-
-    // The native pathfinder can reject fire-field tiles even though CaveBot
-    // considers them walkable. When the route contains a fire field, follow
-    // the already-validated CaveBot A* route one tile at a time instead of
-    // handing the route back to the native collision/pathfinder.
-    const stepped = bot.caveArrowKeys?.stepToPosition?.(nextPos);
-    if (!stepped) return false;
-
-    state.lastPathAt = Date.now();
-    bot.logDebug("cave stepped along Walk Over Fields route", {
-      from: fromPos,
-      to: nextPos,
-      fireFieldRoute: true,
-      pathfinderMode: config.pathfinderMode,
-    });
-    return true;
-  }
-
-  function goToWaypoint(waypoint) {
-    patchFieldWalkabilityForCavePathing();
-    patchRopeSpellWaypointWalkability(waypoint);
+  function goToWaypoint(waypoint) {patchRopeSpellWaypointWalkability(waypoint);
     const from = bot.getPlayerPosition();
     if (!from || !waypoint) return false;
 
     const now = Date.now();
 
-    // All CaveBot pathing modes use a field-aware route when the corridor
-    // crosses damage fields. A* validates walkability, then the native game
-    // pathfinder is asked to move only to the next adjacent tile. This avoids
-    // submitting a long route to native collision checks that reject fields.
-    // Movement still uses the game's pathfinder; no arrow-key/direct-key pathing.
-    const fieldFrom = normalizePosition(from);
-    const fieldGoal = normalizePosition(waypoint);
+    // Follow damage-field routes using the uploaded bot's AutoWalkPacket movement.
+    const fieldFrom = normalizePosition(from), fieldGoal = normalizePosition(waypoint);
     if (fieldFrom && fieldGoal && fieldFrom.z === fieldGoal.z) {
       const fieldPath = findPathAStar(fieldFrom, fieldGoal);
-      const usesDamageField = Array.isArray(fieldPath) && fieldPath.some((position) => {
+      const crossesDamageField = Array.isArray(fieldPath) && fieldPath.some((position) => {
         const tile = getTileAt(position);
-        return isTileWithAlwaysWalkableFireFieldId(tile) ||
-          isPoisonFieldTileForCavePathing(tile) ||
-          (config.walkOverFields && isFireFieldTileForCavePathing(tile));
+        return !!tile && isDamageFieldTile(tile) && !isFloorChangeTile(tile);
       });
-      if (usesDamageField && fieldPath.length > 1) {
-        const nextStep = normalizePosition(fieldPath[1]);
-        if (nextStep && nextStep.z === fieldFrom.z) {
-          try {
-            const nativePathfinder = window.gameClient?.world?.pathfinder;
-            if (typeof nativePathfinder?.findPath === "function") {
-              nativePathfinder.findPath(from, new Position(nextStep.x, nextStep.y, nextStep.z));
-              state.lastPathAt = now;
-              bot.logDebug("cave field-aware native step", {
-                from: fieldFrom,
-                to: nextStep,
-                waypoint: fieldGoal,
-                pathfinderMode: config.pathfinderMode,
-                routeLength: fieldPath.length,
-                damageFieldRoute: true,
-              });
-              return true;
-            }
-          } catch (error) {
-            bot.logDebug("cave field-aware native step failed", {
-              from: fieldFrom,
-              to: nextStep,
-              error: error?.message || String(error),
-            });
+      if (crossesDamageField && fieldPath.length > 1 && typeof AutoWalkPacket === "function" && typeof Position === "function") {
+        try {
+          const directions = [];
+          for (let index = 1; index < fieldPath.length; index += 1) {
+            const previous = fieldPath[index - 1], next = fieldPath[index];
+            const direction = new Position(previous.x, previous.y, previous.z).getLookDirection?.(new Position(next.x, next.y, next.z));
+            if (!Number.isFinite(Number(direction))) throw new Error("Unable to encode field route direction");
+            directions.push(Number(direction));
           }
+          if (directions.length) {
+            window.gameClient?.send?.(new AutoWalkPacket(directions));
+            state.lastPathAt = now;
+            bot.log("cave following uploaded-bot damage-field movement", { from: fieldFrom, to: fieldGoal, steps: directions.length });
+            return true;
+          }
+        } catch (error) {
+          bot.logDebug("cave damage-field AutoWalkPacket failed", { error: error?.message || String(error) });
         }
       }
     }
@@ -1460,10 +1239,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
     const fromPos = normalizePosition(from);
     const waypointPos = normalizePosition(waypoint);
-    if (fromPos && waypointPos && fromPos.z === waypointPos.z) {
-      }
-
-    const to = new Position(waypoint.x, waypoint.y, waypoint.z);
+const to = new Position(waypoint.x, waypoint.y, waypoint.z);
 
     try {
       const nativePathfinder = window.gameClient?.world?.pathfinder;

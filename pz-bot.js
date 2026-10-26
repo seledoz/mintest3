@@ -19,7 +19,7 @@
 
   const repository = "seledoz/mintest3";
   // Pin the runtime to the exact commit so a stale CDN/browser response cannot mix old module code with the current loader.
-  const ref = "91b904fc891750774e4240bb62743bdf04ea509e";
+  const ref = "4ebfa6eadf8e73f3d109153ec31c00c0ff9d75aa";
   const rawBaseUrl = `https://raw.githubusercontent.com/${repository}/${ref}`;
   const sourceFiles = [
     "src/version.js",
@@ -53,7 +53,6 @@
     "src/modules/mining.js",
     "src/modules/red-text-alert.js",
     "src/modules/cave.js",
-    "src/modules/cave-walk-over-fields-global.js",
     "src/modules/cave-forward-loop.js",
     "src/modules/cave-arrow-keys.js",
     "src/modules/cave-waypoint-actions.js",
@@ -144,26 +143,7 @@
     for(const [value,label] of desired){const option=document.createElement("option");option.value=value;option.textContent=label;select.appendChild(option);}
     select.value=desired.some(([value])=>value===current)?current:"game";
 
-    // Recovery guard: ensure the damage-field checkbox is visible even if an older
-    // panel template was installed by a stale script.
-    const caveBot=window.minibiaBot;
-    let fields=document.getElementById("minibia-bot-cave-walk-over-fields");
-    if(!fields){
-      const label=document.createElement("label");
-      label.className="mb-toggle";
-      fields=document.createElement("input");
-      fields.type="checkbox";
-      fields.id="minibia-bot-cave-walk-over-fields";
-      const caption=document.createElement("span");
-      caption.textContent="Walk through damage fields";
-      label.append(fields,caption);
-      select.closest(".mb-field")?.before(label);
-    }
-    if(fields && !fields.dataset.damageFieldToggleBound){
-      fields.dataset.damageFieldToggleBound="true";
-      fields.addEventListener("change",()=>{caveBot?.cave?.updateConfig?.({walkOverFields:fields.checked});});
-    }
-    if(fields)fields.checked=!!caveBot?.cave?.status?.()?.config?.walkOverFields;
+
   }
   function addSafeUiPerformanceOptimizations(code,path){
     if(path==="src/core.js")code=code.replace("  startReconnectWatcher();","  // Reconnect watcher temporarily disabled for FPS testing.");
