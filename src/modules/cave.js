@@ -358,7 +358,9 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
 
   function isDamageFieldTile(tile) {
     return getTileThings(tile).some((thing) => {
-      const properties = getThingDefinition(thing)?.properties || {};
+      // getThingDefinition accepts an item ID, not the item object itself.
+      // The uploaded bot resolves definitions from thing.id.
+      const properties = getThingDefinition(thing?.id)?.properties || {};
       const fieldType = String(properties.field || properties.name || "").trim().toLowerCase();
       return String(properties.type || "").trim().toLowerCase() === "magicfield" &&
         ["poison", "fire", "energy", "poison field", "fire field", "energy field"].includes(fieldType);
