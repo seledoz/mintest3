@@ -74,6 +74,7 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
       enabled: false,
       activePresetName: defaultPresetName,
       pathfinderMode: 'game',
+      useSparduePathing: false,
 },
     bot.storage.get(configStorageKey, {})
   );
@@ -1170,6 +1171,24 @@ window.__minibiaBotBundle.installCaveModule = function installCaveModule(bot) {
           }
         } catch (error) {
           bot.logDebug("cave damage-field AutoWalkPacket failed", { error: error?.message || String(error) });
+        }
+      }
+
+      // Optional compatibility mode matching Mintest2: use the native Spardue
+      // game pathfinder for the waypoint, while preserving damage-field AutoWalk above.
+      if (config.useSparduePathing) {
+        const to = new Position(waypoint.x, waypoint.y, waypoint.z);
+        try {
+          window.gameClient?.world?.pathfinder?.findPath?.(from, to);
+          state.lastPathAt = now;
+          bot.log("cave using Spardue native pathing", {
+            ...waypoint, index: state.currentIndex + 1, total: route.length,
+            damageFieldAutoWalkAvailable: Array.isArray(fieldPath) && crossesDamageField
+          });
+          return true;
+        } catch (error) {
+          bot.log("cave Spardue pathing failed", { ...waypoint, error: error?.message || error });
+          return false;
         }
       }
     }
